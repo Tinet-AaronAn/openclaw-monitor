@@ -40,6 +40,58 @@ export class OpenClawLogWatcher {
     }
   }
 
+  /**
+   * 重放当天日志（用于修复数据准确性）
+   * 只处理 run done 事件，更新 Run 状态
+   */
+  async replayLogs(): Promise<{ runsCompleted: number; runsAborted: number }> {
+    console.log('[LogWatcher] Starting log replay for run completion...');
+    
+    let runsCompleted = 0;
+    let runsAborted = 0;
+    
+    try {
+      const content = await readFile(this.logFile, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+      
+      for (const line of lines) {
+        try {
+          if (line.startsWith('{')) {
+            const log = JSON.parse(line);
+            const message = log['1'] || log.message || '';
+            const time = log.time || new Date().toISOString();
+            
+            // 只处理 run done 事件
+            if (message.includes('embedded run done')) {
+              const match = message.match(/embedded run done: runId=([^\s]+) sessionId=([^\s]+) durationMs=(\d+) aborted=(true|false)/);
+              if (match) {
+                const [, runId, sessionId, durationMs, aborted] = match;
+                
+                // 直接发送完成事件
+                const eventType = aborted === 'true' ? 'run_aborted' : 'run_completed';
+                this.emitLifecycleEvent(message, time, eventType, runId, sessionId, parseInt(durationMs));
+                
+                if (aborted === 'true') {
+                  runsAborted++;
+                } else {
+                  runsCompleted++;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          // 忽略解析错误
+        }
+      }
+      
+      console.log(`[LogWatcher] Replay completed: ${runsCompleted} runs completed, ${runsAborted} runs aborted`);
+      return { runsCompleted, runsAborted };
+    } catch (error) {
+      console.error('[LogWatcher] Replay failed:', error);
+      throw error;
+    }
+  }
+
   setEventCallback(callback: (event: AgentEventPayload) => void): void {
     this.onEvent = callback;
   }

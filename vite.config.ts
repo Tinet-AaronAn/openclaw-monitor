@@ -14,7 +14,7 @@ export default defineConfig({
     host: true,  // 允许外部访问
     allowedHosts: [
       'localhost',
-      '.loca.lt',  // 允许所有 localtunnel 子域名
+      // 可以添加局域网 IP 或自定义域名
     ],
     proxy: {
       '/api': {

@@ -123,10 +123,18 @@ export class OpenClawLogWatcher {
       if (line.startsWith('{')) {
         const log = JSON.parse(line);
         const message = log['1'] || log.message || '';
+        const time = log.time || new Date().toISOString();
         
         // 解析 run start 以获取 sessionId
         if (message.includes('embedded run start')) {
           this.parseRunStart(message);
+          // 发送 run_started 事件
+          this.emitLifecycleEvent(message, time, 'run_started');
+        }
+        
+        // 解析 run done 事件
+        if (message.includes('embedded run done')) {
+          this.parseRunDone(message, time);
         }
         
         // 解析 tool 事件
@@ -146,6 +154,18 @@ export class OpenClawLogWatcher {
       const [, runId, sessionId] = match;
       this.runSessionMap.set(runId, sessionId);
       console.log(`[LogWatcher] Mapped runId ${runId.slice(0, 8)} -> sessionId ${sessionId.slice(0, 8)}`);
+    }
+  }
+
+  private parseRunDone(message: string, time: string): void {
+    // embedded run done: runId=xxx sessionId=yyy durationMs=zzz aborted=false
+    const match = message.match(/embedded run done: runId=([^\s]+) sessionId=([^\s]+) durationMs=(\d+) aborted=(true|false)/);
+    if (match) {
+      const [, runId, sessionId, durationMs, aborted] = match;
+      
+      // 发送 run_completed 或 run_aborted 事件
+      const eventType = aborted === 'true' ? 'run_aborted' : 'run_completed';
+      this.emitLifecycleEvent(message, time, eventType, runId, sessionId, parseInt(durationMs));
     }
   }
 
@@ -199,5 +219,56 @@ export class OpenClawLogWatcher {
 
     this.onEvent(event);
     console.log(`[LogWatcher] Captured: ${tool} ${eventType} for runId ${runId.slice(0, 8)} (session: ${sessionKey.slice(0, 20)})`);
+  }
+
+  private emitLifecycleEvent(
+    message: string, 
+    time: string, 
+    eventType: 'run_started' | 'run_completed' | 'run_aborted' | 'run_failed',
+    explicitRunId?: string,
+    explicitSessionId?: string,
+    durationMs?: number
+  ): void {
+    if (!this.onEvent) return;
+
+    this.seqCounter++;
+
+    // 尝试从 message 中解析 runId 和 sessionId（如果没有显式提供）
+    let runId = explicitRunId;
+    let sessionId = explicitSessionId;
+    
+    if (!runId) {
+      const match = message.match(/runId=([^\s]+)/);
+      if (match) {
+        runId = match[1];
+      }
+    }
+    
+    if (!sessionId && runId) {
+      sessionId = this.runSessionMap.get(runId);
+    }
+
+    // 获取正确的 sessionKey
+    let sessionKey = 'unknown';
+    if (sessionId) {
+      sessionKey = this.sessionKeyMap.get(sessionId) || `session:${sessionId.slice(0, 8)}`;
+    }
+
+    const event: AgentEventPayload = {
+      runId: runId || 'unknown',
+      seq: this.seqCounter,
+      stream: 'lifecycle',
+      ts: new Date(time).getTime(),
+      data: {
+        event: eventType,
+        timestamp: time,
+        sessionId: sessionId || undefined,
+        durationMs: durationMs || undefined
+      },
+      sessionKey
+    };
+
+    this.onEvent(event);
+    console.log(`[LogWatcher] Lifecycle: ${eventType} for runId ${runId?.slice(0, 8) || 'unknown'} (session: ${sessionKey.slice(0, 20)})`);
   }
 }

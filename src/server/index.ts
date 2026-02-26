@@ -128,6 +128,24 @@ app.post('/api/events', (req, res) => {
   res.json({ status: 'ok', eventId: `${event.runId}-${event.seq}` });
 });
 
+// 重放当天日志（修复数据准确性）
+app.post('/api/replay', async (_req, res) => {
+  try {
+    const result = await logWatcher.replayLogs();
+    res.json({
+      status: 'ok',
+      message: 'Log replay completed',
+      ...result
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Log replay failed',
+      error: (error as Error).message
+    });
+  }
+});
+
 // Setup session monitor callbacks
 sessionMonitor.setUpdateCallback((sessionKey, entry) => {
   sessionsStore.set(sessionKey, entry);

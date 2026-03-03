@@ -49,8 +49,8 @@ jobs:
       - name: Analyze code for annotations
         id: annotations
         run: |
-          # 创建 Node.js 脚本分析代码
-          cat > analyze-code.js << 'EOF'
+          # 创建 Node.js 脚本分析代码 (使用 .cjs 扩展名避免 ES module 问题)
+          cat > analyze-code.cjs << 'EOF'
           const { execSync } = require('child_process');
           const fs = require('fs');
 
@@ -148,7 +148,7 @@ jobs:
           EOF
 
           # 运行分析脚本
-          node analyze-code.js
+          node analyze-code.cjs
 
           # 保存 annotations 到输出
           echo "annotations<<EOF" >> $GITHUB_OUTPUT

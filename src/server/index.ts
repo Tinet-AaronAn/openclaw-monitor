@@ -10,7 +10,6 @@ import { OpenClawLogWatcher } from './log-watcher.js';
 import { SessionFileWatcher } from './session-file-watcher.js';
 import { EventCoordinator } from './event-coordinator.js';
 import { OpenClawCLI } from './openclaw-cli.js';
-import type { MonitorState } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,6 +26,9 @@ const CLI_POLL_INTERVAL = parseInt(process.env.CLI_POLL_INTERVAL || '5000', 10);
 const app = express();
 const server = createServer(app);
 
+// 内存中的 sessions 存储（需要在使用前定义）
+const sessionsStore = new Map<string, any>();
+
 // Middleware
 app.use(express.json());
 app.use((_req, res, next) => {
@@ -35,6 +37,10 @@ app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   next();
 });
+
+// 静态文件服务（前端页面）
+const clientDistPath = resolve(__dirname, '../client');
+app.use(express.static(clientDistPath));
 
 // Components
 const sessionMonitor = new SessionMonitor(SESSIONS_DIR);
@@ -45,8 +51,14 @@ const sessionFileWatcher = new SessionFileWatcher();
 const eventCoordinator = new EventCoordinator();
 const openclawCLI = new OpenClawCLI();
 
-// 内存中的 sessions 存储
-const sessionsStore = new Map<string, any>();
+// 设置 WebSocket 状态提供者
+wsServer.setStateProvider(() => ({
+  sessions: Array.from(sessionsStore.entries()).map(([k, v]) => ({ sessionKey: k, ...v })),
+  runs: Array.from(runTracker.getRuns().entries()).map(([k, v]) => ({ ...v, runId: k })),
+  events: runTracker.getEvents().slice(-100),
+  connectedClients: wsServer.getConnectedClients(),
+  startedAt: Date.now(),
+}));
 
 // API Routes
 app.get('/api/sessions', (_req, res) => {
@@ -92,20 +104,14 @@ app.get('/api/events', (req, res) => {
 });
 
 app.get('/api/state', (_req, res) => {
-  const state: MonitorState = {
-    sessions: sessionsStore,
-    runs: runTracker.getRuns(),
+  const state = {
+    sessions: Array.from(sessionsStore.entries()).map(([k, v]) => ({ sessionKey: k, ...v })),
+    runs: Array.from(runTracker.getRuns().entries()).map(([k, v]) => ({ ...v, runId: k })),
     events: runTracker.getEvents().slice(-100),
     connectedClients: wsServer.getConnectedClients(),
     startedAt: Date.now(),
   };
-  res.json({
-    sessions: Array.from(state.sessions.entries()).map(([k, v]) => ({ sessionKey: k, ...v })),
-    runs: Array.from(state.runs.entries()).map(([k, v]) => ({ ...v, runId: k })),
-    events: state.events,
-    connectedClients: state.connectedClients,
-    startedAt: state.startedAt,
-  });
+  res.json(state);
 });
 
 // Health check
@@ -167,6 +173,23 @@ if (ENABLE_LOG_WATCHER) {
       wsServer.broadcastRunStarted(run);
     }
   });
+
+  // 当发现新 session 时更新 sessionsStore
+  logWatcher.setSessionCallback((sessionKey, sessionId) => {
+    if (!sessionsStore.has(sessionKey)) {
+      const entry: any = {
+        sessionId,
+        updatedAt: Date.now(),
+        chatType: sessionKey.includes(':group:') ? 'group' : 'direct',
+        channel: sessionKey.includes('dingtalk') ? 'dingtalk' : 
+                 sessionKey.includes('telegram') ? 'telegram' : 
+                 sessionKey.includes('webchat') ? 'webchat' : 'unknown',
+      };
+      sessionsStore.set(sessionKey, entry);
+      wsServer.broadcastSessionUpdated(sessionKey, entry);
+      console.log(`[LogWatcher] Added session: ${sessionKey.slice(0, 40)}...`);
+    }
+  });
 }
 
 // Setup session file watcher callbacks
@@ -180,6 +203,23 @@ sessionFileWatcher.setEventCallback((event) => {
       toolData.rawArgs,
       toolData.args
     );
+  }
+});
+
+// Setup session file watcher message callback
+sessionFileWatcher.setSessionMessageCallback((sessionId, message, sender, time) => {
+  // 找到对应的 sessionKey
+  for (const [sessionKey, entry] of sessionsStore.entries()) {
+    if (entry.sessionId === sessionId) {
+      // 更新 session 的最后消息
+      entry.lastMessage = message;
+      entry.lastMessageSender = sender;
+      entry.lastMessageTime = time;
+      
+      // 广播更新
+      wsServer.broadcastSessionUpdated(sessionKey, entry);
+      break;
+    }
   }
 });
 

@@ -2,13 +2,20 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 import type { WSMessage, MonitorState, AgentEventPayload, Run, SessionEntry } from './types.js';
 
+type StateProvider = () => MonitorState;
+
 export class MonitorWebSocketServer {
   private wss: WebSocketServer;
   private clients: Set<WebSocket> = new Set();
+  private stateProvider: StateProvider | null = null;
 
   constructor(port: number) {
     this.wss = new WebSocketServer({ port });
     this.setup();
+  }
+
+  setStateProvider(provider: StateProvider): void {
+    this.stateProvider = provider;
   }
 
   private setup(): void {
@@ -26,14 +33,18 @@ export class MonitorWebSocketServer {
         this.clients.delete(ws);
       });
 
-      // Send initial state
+      // 连接后立即发送完整状态
       this.sendInitialState(ws);
     });
   }
 
-  private sendInitialState(_ws: WebSocket): void {
-    // This will be called when client connects
-    // The actual state will be sent by the monitor server
+  private sendInitialState(ws: WebSocket): void {
+    if (this.stateProvider && ws.readyState === WebSocket.OPEN) {
+      const state = this.stateProvider();
+      const message: WSMessage = { type: 'state', payload: state };
+      ws.send(JSON.stringify(message));
+      console.log('Sent initial state to new client');
+    }
   }
 
   broadcastState(state: MonitorState): void {

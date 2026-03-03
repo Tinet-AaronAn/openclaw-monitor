@@ -157,13 +157,15 @@ monitor-status
 
 ## 🌐 访问地址
 
-**本地：**
-- 前端：http://localhost:5174/
+**开发模式：**
+- 前端开发服务器：http://localhost:5174/（Vite，热更新）
 - API：http://localhost:3011/
-- Health：http://localhost:3011/health
+- WebSocket：ws://localhost:3012/
 
-**局域网：**
-- 前端：http://192.168.10.127:5174/
+**生产模式（PM2）：**
+- 所有服务（Web + API）：http://localhost:3011/
+- WebSocket：ws://localhost:3012/
+- Health：http://localhost:3011/health
 
 ## 📚 参考文档
 

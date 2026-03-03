@@ -176,6 +176,25 @@ export function SessionList({ sessions, runs, selectedSession, onSelect }: Sessi
                   </div>
                 )}
               </div>
+              
+              {/* 最后一条消息 */}
+              {session.lastMessage && (
+                <div className="mt-2 p-2 bg-white/50 rounded text-xs">
+                  <div className="flex items-start gap-2">
+                    <span className="font-medium text-slate-500 flex-shrink-0">Last:</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-slate-700 truncate block">
+                        {session.lastMessageSender && (
+                          <span className="text-blue-600 font-medium">[{session.lastMessageSender}]</span>
+                        )}{' '}
+                        {session.lastMessage.length > 80 
+                          ? `${session.lastMessage.slice(0, 80)}...` 
+                          : session.lastMessage}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </button>
           );
         })}

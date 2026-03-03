@@ -87,8 +87,8 @@ export type SessionEntry = {
 };
 
 export type MonitorState = {
-  sessions: Map<string, SessionEntry>;
-  runs: Map<string, Run>;
+  sessions: (SessionEntry & { sessionKey: string })[];
+  runs: Run[];
   events: AgentEventPayload[];
   connectedClients: number;
   startedAt: number;

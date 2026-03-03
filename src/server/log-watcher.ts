@@ -2,11 +2,14 @@ import { watch } from 'fs';
 import { readFile } from 'fs/promises';
 import type { AgentEventPayload } from './types.js';
 
+type SessionCallback = (sessionKey: string, sessionId: string) => void;
+
 export class OpenClawLogWatcher {
   private logFile: string;
   private lastPosition: number = 0;
   private watcher: ReturnType<typeof watch> | null = null;
   private onEvent: ((event: AgentEventPayload) => void) | null = null;
+  private onSession: SessionCallback | null = null;
   private seqCounter: number = 0;
   
   // runId -> sessionId 映射
@@ -38,6 +41,14 @@ export class OpenClawLogWatcher {
       this.watcher.close();
       this.watcher = null;
     }
+  }
+
+  setSessionCallback(callback: SessionCallback): void {
+    this.onSession = callback;
+  }
+
+  getSessionKeyMap(): Map<string, string> {
+    return this.sessionKeyMap;
   }
 
   /**
@@ -131,7 +142,12 @@ export class OpenClawLogWatcher {
   private async loadSessionKeyMap(): Promise<void> {
     try {
       const { execSync } = await import('child_process');
-      const output = execSync('openclaw sessions --json', { encoding: 'utf-8' });
+      // 使用绝对路径或者从 PATH 中查找
+      const openclawPath = process.env.OPENCLAW_PATH || 'openclaw';
+      const output = execSync(`${openclawPath} sessions --json`, { 
+        encoding: 'utf-8',
+        env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') }
+      });
       
       // 跳过开头的警告信息
       const jsonStart = output.indexOf('{');
@@ -142,6 +158,10 @@ export class OpenClawLogWatcher {
         for (const session of data.sessions) {
           if (session.sessionId && session.key) {
             this.sessionKeyMap.set(session.sessionId, session.key);
+            // 通知新发现的 session
+            if (this.onSession) {
+              this.onSession(session.key, session.sessionId);
+            }
           }
         }
       }

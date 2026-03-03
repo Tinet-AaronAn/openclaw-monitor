@@ -53,6 +53,9 @@ export type SessionEntry = {
   };
   lastChannel?: string;
   lastTo?: string;
+  lastMessage?: string;
+  lastMessageSender?: string;
+  lastMessageTime?: number;
 };
 
 export type Session = SessionEntry & {

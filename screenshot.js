@@ -11,7 +11,10 @@ async function screenshot() {
   const page = await browser.newPage();
 
   // 访问监控界面
-  await page.goto('http://localhost:5174/', { waitUntil: 'networkidle' });
+  // 生产模式：http://localhost:3011/
+  // 开发模式：http://localhost:5174/
+  const url = process.env.NODE_ENV === 'development' ? 'http://localhost:5174/' : 'http://localhost:3011/';
+  await page.goto(url, { waitUntil: 'networkidle' });
 
   // 等待数据加载
   await page.waitForTimeout(2000);

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useMonitor } from '../src/client/hooks/useMonitor';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { useMonitor } from "../src/client/hooks/useMonitor";
 
 // Mock WebSocket
 class MockWebSocket {
@@ -17,14 +17,14 @@ class MockWebSocket {
 
   constructor(public url: string) {
     setTimeout(() => {
-      this.onopen?.(new Event('open'));
+      this.onopen?.(new Event("open"));
     }, 0);
   }
 
   send(data: string) {}
   close() {
     this.readyState = MockWebSocket.CLOSED;
-    this.onclose?.(new CloseEvent('close'));
+    this.onclose?.(new CloseEvent("close"));
   }
 }
 
@@ -33,17 +33,18 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 global.WebSocket = MockWebSocket as any;
 
-describe('useMonitor Hook', () => {
+describe("useMonitor Hook", () => {
   beforeEach(() => {
     mockFetch.mockClear();
     mockFetch.mockResolvedValue({
-      json: () => Promise.resolve({
-        sessions: [],
-        runs: [],
-        events: [],
-        connectedClients: 0,
-        startedAt: Date.now(),
-      }),
+      json: () =>
+        Promise.resolve({
+          sessions: [],
+          runs: [],
+          events: [],
+          connectedClients: 0,
+          startedAt: Date.now(),
+        }),
     });
   });
 
@@ -51,15 +52,15 @@ describe('useMonitor Hook', () => {
     vi.clearAllTimers();
   });
 
-  it('should fetch initial state on mount', async () => {
+  it("should fetch initial state on mount", async () => {
     const { result } = renderHook(() => useMonitor());
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:3011/api/state');
+      expect(mockFetch).toHaveBeenCalledWith("http://localhost:3011/api/state");
     });
   });
 
-  it('should set connected to true when WebSocket opens', async () => {
+  it("should set connected to true when WebSocket opens", async () => {
     const { result } = renderHook(() => useMonitor());
 
     await waitFor(() => {
@@ -67,7 +68,7 @@ describe('useMonitor Hook', () => {
     });
   });
 
-  it('should update state when receiving state message', async () => {
+  it("should update state when receiving state message", async () => {
     const { result } = renderHook(() => useMonitor());
 
     await waitFor(() => {
@@ -75,8 +76,15 @@ describe('useMonitor Hook', () => {
     });
 
     const mockState = {
-      sessions: [{ sessionKey: 'test-session', sessionId: 'test' }],
-      runs: [{ runId: 'test-run', status: 'running', startedAt: Date.now(), eventCount: 0 }],
+      sessions: [{ sessionKey: "test-session", sessionId: "test" }],
+      runs: [
+        {
+          runId: "test-run",
+          status: "running",
+          startedAt: Date.now(),
+          eventCount: 0,
+        },
+      ],
       events: [],
       connectedClients: 1,
       startedAt: Date.now(),
@@ -85,9 +93,11 @@ describe('useMonitor Hook', () => {
     act(() => {
       const ws = (global.WebSocket as any).instances?.[0];
       if (ws && ws.onmessage) {
-        ws.onmessage(new MessageEvent('message', {
-          data: JSON.stringify({ type: 'state', payload: mockState }),
-        }));
+        ws.onmessage(
+          new MessageEvent("message", {
+            data: JSON.stringify({ type: "state", payload: mockState }),
+          }),
+        );
       }
     });
 
@@ -95,7 +105,7 @@ describe('useMonitor Hook', () => {
     // 主要验证 hook 的基本功能
   });
 
-  it('should add event to state when receiving event message', async () => {
+  it("should add event to state when receiving event message", async () => {
     const { result } = renderHook(() => useMonitor());
 
     await waitFor(() => {
@@ -104,10 +114,10 @@ describe('useMonitor Hook', () => {
 
     // 简化测试：验证 hook 能正常返回 state 和 connected
     expect(result.current.state).toBeDefined();
-    expect(typeof result.current.connected).toBe('boolean');
+    expect(typeof result.current.connected).toBe("boolean");
   });
 
-  it('should add run when receiving run_started message', async () => {
+  it("should add run when receiving run_started message", async () => {
     const { result } = renderHook(() => useMonitor());
 
     await waitFor(() => {
@@ -120,7 +130,7 @@ describe('useMonitor Hook', () => {
     expect(result.current.state.events).toEqual([]);
   });
 
-  it('should deduplicate runs when receiving duplicate run_started', async () => {
+  it("should deduplicate runs when receiving duplicate run_started", async () => {
     const { result } = renderHook(() => useMonitor());
 
     await waitFor(() => {

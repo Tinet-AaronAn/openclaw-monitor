@@ -1,11 +1,11 @@
 // OpenClaw CLI 轮询 - 定期获取 sessions 数据
 
-import { OpenClawCLI } from './openclaw-cli.js';
-import type { MonitorWebSocketServer } from './websocket-server.js';
+import { OpenClawCLI } from "./openclaw-cli.js";
+import type { MonitorWebSocketServer } from "./websocket-server.js";
 
 export function startCLIPolling(
   wsServer: MonitorWebSocketServer,
-  interval: number = 5000
+  interval: number = 5000,
 ): void {
   const cli = new OpenClawCLI();
 
@@ -30,7 +30,7 @@ export function startCLIPolling(
         }
       }
     } catch (error) {
-      console.error('[CLI Polling] Error:', error);
+      console.error("[CLI Polling] Error:", error);
     }
   }
 }

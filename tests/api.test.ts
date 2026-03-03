@@ -1,15 +1,28 @@
 /**
  * API 端点集成测试
- * 
+ *
  * 测试所有 HTTP API 端点
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import express, { Application } from 'express';
-import { createServer, Server } from 'http';
-import request from 'supertest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from "vitest";
+import express, { Application } from "express";
+import { createServer, Server } from "http";
+import request from "supertest";
 
 // 创建测试用的 express 应用
-function createTestApp(): { app: Application; server: Server; sessionsStore: Map<string, any>; runTracker: any } {
+function createTestApp(): {
+  app: Application;
+  server: Server;
+  sessionsStore: Map<string, any>;
+  runTracker: any;
+} {
   const app = express();
   const server = createServer(app);
   const sessionsStore = new Map<string, any>();
@@ -19,9 +32,9 @@ function createTestApp(): { app: Application; server: Server; sessionsStore: Map
     processEvent: vi.fn((event: any) => {
       const run = {
         runId: event.runId,
-        status: 'running',
+        status: "running",
         startedAt: event.ts,
-        eventCount: 1
+        eventCount: 1,
       };
       runTracker.runs.set(event.runId, run);
       runTracker.events.push(event);
@@ -30,82 +43,91 @@ function createTestApp(): { app: Application; server: Server; sessionsStore: Map
     getRuns: () => runTracker.runs,
     getEvents: () => runTracker.events,
     getRun: (id: string) => runTracker.runs.get(id),
-    getRecentRuns: (limit: number) => Array.from(runTracker.runs.values()).slice(0, limit),
-    getEventsForRun: (runId: string) => runTracker.events.filter((e: any) => e.runId === runId)
+    getRecentRuns: (limit: number) =>
+      Array.from(runTracker.runs.values()).slice(0, limit),
+    getEventsForRun: (runId: string) =>
+      runTracker.events.filter((e: any) => e.runId === runId),
   };
 
   app.use(express.json());
 
   // CORS
   app.use((_req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", "*");
     next();
   });
 
   // Health check
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: Date.now() });
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: Date.now() });
   });
 
   // Sessions API
-  app.get('/api/sessions', (_req, res) => {
-    const sessions = Array.from(sessionsStore.entries()).map(([key, entry]) => ({
-      sessionKey: key,
-      ...entry
-    }));
+  app.get("/api/sessions", (_req, res) => {
+    const sessions = Array.from(sessionsStore.entries()).map(
+      ([key, entry]) => ({
+        sessionKey: key,
+        ...entry,
+      }),
+    );
     res.json(sessions);
   });
 
-  app.get('/api/sessions/:sessionKey', (req, res) => {
+  app.get("/api/sessions/:sessionKey", (req, res) => {
     const entry = sessionsStore.get(req.params.sessionKey);
     if (!entry) {
-      res.status(404).json({ error: 'Session not found' });
+      res.status(404).json({ error: "Session not found" });
       return;
     }
     res.json({ sessionKey: req.params.sessionKey, ...entry });
   });
 
   // Runs API
-  app.get('/api/runs', (_req, res) => {
+  app.get("/api/runs", (_req, res) => {
     const runs = runTracker.getRecentRuns(50);
     res.json(runs);
   });
 
-  app.get('/api/runs/:runId', (req, res) => {
+  app.get("/api/runs/:runId", (req, res) => {
     const run = runTracker.getRun(req.params.runId);
     if (!run) {
-      res.status(404).json({ error: 'Run not found' });
+      res.status(404).json({ error: "Run not found" });
       return;
     }
     res.json(run);
   });
 
-  app.get('/api/runs/:runId/events', (req, res) => {
+  app.get("/api/runs/:runId/events", (req, res) => {
     const events = runTracker.getEventsForRun(req.params.runId);
     res.json(events);
   });
 
   // Events API
-  app.get('/api/events', (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+  app.get("/api/events", (req, res) => {
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 100;
     const events = runTracker.getEvents().slice(-limit);
     res.json(events);
   });
 
-  app.post('/api/events', (req, res) => {
+  app.post("/api/events", (req, res) => {
     const event = req.body;
     runTracker.processEvent(event);
-    res.json({ status: 'ok', eventId: `${event.runId}-${event.seq}` });
+    res.json({ status: "ok", eventId: `${event.runId}-${event.seq}` });
   });
 
   // State API
-  app.get('/api/state', (_req, res) => {
+  app.get("/api/state", (_req, res) => {
     const state = {
-      sessions: Array.from(sessionsStore.entries()).map(([k, v]) => ({ sessionKey: k, ...v })),
+      sessions: Array.from(sessionsStore.entries()).map(([k, v]) => ({
+        sessionKey: k,
+        ...v,
+      })),
       runs: Array.from(runTracker.getRuns().values()),
       events: runTracker.getEvents().slice(-100),
       connectedClients: 0,
-      startedAt: Date.now()
+      startedAt: Date.now(),
     };
     res.json(state);
   });
@@ -113,7 +135,7 @@ function createTestApp(): { app: Application; server: Server; sessionsStore: Map
   return { app, server, sessionsStore, runTracker };
 }
 
-describe('API Endpoints', () => {
+describe("API Endpoints", () => {
   let app: Application;
   let server: Server;
   let sessionsStore: Map<string, any>;
@@ -137,207 +159,216 @@ describe('API Endpoints', () => {
     runTracker.events = [];
   });
 
-  describe('GET /health', () => {
-    it('should return health status', async () => {
-      const response = await request(app).get('/health');
+  describe("GET /health", () => {
+    it("should return health status", async () => {
+      const response = await request(app).get("/health");
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe('ok');
+      expect(response.body.status).toBe("ok");
       expect(response.body.timestamp).toBeDefined();
     });
   });
 
-  describe('GET /api/state', () => {
-    it('should return complete monitor state', async () => {
-      const response = await request(app).get('/api/state');
+  describe("GET /api/state", () => {
+    it("should return complete monitor state", async () => {
+      const response = await request(app).get("/api/state");
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('sessions');
-      expect(response.body).toHaveProperty('runs');
-      expect(response.body).toHaveProperty('events');
-      expect(response.body).toHaveProperty('connectedClients');
-      expect(response.body).toHaveProperty('startedAt');
+      expect(response.body).toHaveProperty("sessions");
+      expect(response.body).toHaveProperty("runs");
+      expect(response.body).toHaveProperty("events");
+      expect(response.body).toHaveProperty("connectedClients");
+      expect(response.body).toHaveProperty("startedAt");
     });
 
-    it('should include sessions from store', async () => {
-      sessionsStore.set('test-session', {
-        sessionId: 'test-session',
+    it("should include sessions from store", async () => {
+      sessionsStore.set("test-session", {
+        sessionId: "test-session",
         updatedAt: Date.now(),
-        model: 'zai/glm-5'
+        model: "zai/glm-5",
       });
 
-      const response = await request(app).get('/api/state');
+      const response = await request(app).get("/api/state");
 
       expect(response.body.sessions.length).toBe(1);
-      expect(response.body.sessions[0].sessionKey).toBe('test-session');
+      expect(response.body.sessions[0].sessionKey).toBe("test-session");
     });
   });
 
-  describe('GET /api/sessions', () => {
-    it('should return empty array when no sessions', async () => {
-      const response = await request(app).get('/api/sessions');
+  describe("GET /api/sessions", () => {
+    it("should return empty array when no sessions", async () => {
+      const response = await request(app).get("/api/sessions");
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual([]);
     });
 
-    it('should return all sessions', async () => {
-      sessionsStore.set('session-1', { sessionId: 'session-1', updatedAt: Date.now() });
-      sessionsStore.set('session-2', { sessionId: 'session-2', updatedAt: Date.now() });
-
-      const response = await request(app).get('/api/sessions');
-
-      expect(response.status).toBe(200);
-      expect(response.body.length).toBe(2);
-    });
-  });
-
-  describe('GET /api/sessions/:sessionKey', () => {
-    it('should return 404 for non-existent session', async () => {
-      const response = await request(app).get('/api/sessions/nonexistent');
-
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Session not found');
-    });
-
-    it('should return session details', async () => {
-      sessionsStore.set('test-session', {
-        sessionId: 'test-session',
+    it("should return all sessions", async () => {
+      sessionsStore.set("session-1", {
+        sessionId: "session-1",
         updatedAt: Date.now(),
-        model: 'zai/glm-5'
+      });
+      sessionsStore.set("session-2", {
+        sessionId: "session-2",
+        updatedAt: Date.now(),
       });
 
-      const response = await request(app).get('/api/sessions/test-session');
+      const response = await request(app).get("/api/sessions");
 
       expect(response.status).toBe(200);
-      expect(response.body.sessionKey).toBe('test-session');
-      expect(response.body.model).toBe('zai/glm-5');
+      expect(response.body.length).toBe(2);
     });
   });
 
-  describe('GET /api/runs', () => {
-    it('should return empty array when no runs', async () => {
-      const response = await request(app).get('/api/runs');
+  describe("GET /api/sessions/:sessionKey", () => {
+    it("should return 404 for non-existent session", async () => {
+      const response = await request(app).get("/api/sessions/nonexistent");
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("Session not found");
+    });
+
+    it("should return session details", async () => {
+      sessionsStore.set("test-session", {
+        sessionId: "test-session",
+        updatedAt: Date.now(),
+        model: "zai/glm-5",
+      });
+
+      const response = await request(app).get("/api/sessions/test-session");
+
+      expect(response.status).toBe(200);
+      expect(response.body.sessionKey).toBe("test-session");
+      expect(response.body.model).toBe("zai/glm-5");
+    });
+  });
+
+  describe("GET /api/runs", () => {
+    it("should return empty array when no runs", async () => {
+      const response = await request(app).get("/api/runs");
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual([]);
     });
 
-    it('should return recent runs', async () => {
-      runTracker.runs.set('run-1', { runId: 'run-1', status: 'running' });
-      runTracker.runs.set('run-2', { runId: 'run-2', status: 'completed' });
+    it("should return recent runs", async () => {
+      runTracker.runs.set("run-1", { runId: "run-1", status: "running" });
+      runTracker.runs.set("run-2", { runId: "run-2", status: "completed" });
 
-      const response = await request(app).get('/api/runs');
+      const response = await request(app).get("/api/runs");
 
       expect(response.status).toBe(200);
       expect(response.body.length).toBe(2);
     });
   });
 
-  describe('GET /api/runs/:runId', () => {
-    it('should return 404 for non-existent run', async () => {
-      const response = await request(app).get('/api/runs/nonexistent');
+  describe("GET /api/runs/:runId", () => {
+    it("should return 404 for non-existent run", async () => {
+      const response = await request(app).get("/api/runs/nonexistent");
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Run not found');
+      expect(response.body.error).toBe("Run not found");
     });
 
-    it('should return run details', async () => {
-      runTracker.runs.set('test-run', {
-        runId: 'test-run',
-        status: 'running',
+    it("should return run details", async () => {
+      runTracker.runs.set("test-run", {
+        runId: "test-run",
+        status: "running",
         startedAt: Date.now(),
-        eventCount: 5
+        eventCount: 5,
       });
 
-      const response = await request(app).get('/api/runs/test-run');
+      const response = await request(app).get("/api/runs/test-run");
 
       expect(response.status).toBe(200);
-      expect(response.body.runId).toBe('test-run');
+      expect(response.body.runId).toBe("test-run");
     });
   });
 
-  describe('GET /api/runs/:runId/events', () => {
-    it('should return events for a specific run', async () => {
+  describe("GET /api/runs/:runId/events", () => {
+    it("should return events for a specific run", async () => {
       runTracker.events = [
-        { runId: 'run-1', seq: 0, stream: 'tool', data: {} },
-        { runId: 'run-1', seq: 1, stream: 'assistant', data: {} },
-        { runId: 'run-2', seq: 0, stream: 'tool', data: {} }
+        { runId: "run-1", seq: 0, stream: "tool", data: {} },
+        { runId: "run-1", seq: 1, stream: "assistant", data: {} },
+        { runId: "run-2", seq: 0, stream: "tool", data: {} },
       ];
 
-      const response = await request(app).get('/api/runs/run-1/events');
+      const response = await request(app).get("/api/runs/run-1/events");
 
       expect(response.status).toBe(200);
       expect(response.body.length).toBe(2);
-      expect(response.body.every((e: any) => e.runId === 'run-1')).toBe(true);
+      expect(response.body.every((e: any) => e.runId === "run-1")).toBe(true);
     });
   });
 
-  describe('GET /api/events', () => {
-    it('should return all events', async () => {
+  describe("GET /api/events", () => {
+    it("should return all events", async () => {
       runTracker.events = [
-        { runId: 'run-1', seq: 0, stream: 'tool', data: {} },
-        { runId: 'run-2', seq: 0, stream: 'tool', data: {} }
+        { runId: "run-1", seq: 0, stream: "tool", data: {} },
+        { runId: "run-2", seq: 0, stream: "tool", data: {} },
       ];
 
-      const response = await request(app).get('/api/events');
+      const response = await request(app).get("/api/events");
 
       expect(response.status).toBe(200);
       expect(response.body.length).toBe(2);
     });
 
-    it('should respect limit parameter', async () => {
+    it("should respect limit parameter", async () => {
       for (let i = 0; i < 200; i++) {
-        runTracker.events.push({ runId: `run-${i}`, seq: 0, stream: 'tool', data: {} });
+        runTracker.events.push({
+          runId: `run-${i}`,
+          seq: 0,
+          stream: "tool",
+          data: {},
+        });
       }
 
-      const response = await request(app).get('/api/events?limit=10');
+      const response = await request(app).get("/api/events?limit=10");
 
       expect(response.status).toBe(200);
       expect(response.body.length).toBe(10);
     });
   });
 
-  describe('POST /api/events', () => {
-    it('should accept and process events', async () => {
+  describe("POST /api/events", () => {
+    it("should accept and process events", async () => {
       const event = {
-        runId: 'new-run',
+        runId: "new-run",
         seq: 0,
-        stream: 'tool' as const,
+        stream: "tool" as const,
         ts: Date.now(),
-        data: { tool: 'read', event: 'start' }
+        data: { tool: "read", event: "start" },
       };
 
-      const response = await request(app)
-        .post('/api/events')
-        .send(event);
+      const response = await request(app).post("/api/events").send(event);
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe('ok');
-      expect(response.body.eventId).toBe('new-run-0');
+      expect(response.body.status).toBe("ok");
+      expect(response.body.eventId).toBe("new-run-0");
     });
 
-    it('should store events in tracker', async () => {
+    it("should store events in tracker", async () => {
       const event = {
-        runId: 'stored-run',
+        runId: "stored-run",
         seq: 0,
-        stream: 'tool' as const,
+        stream: "tool" as const,
         ts: Date.now(),
-        data: { tool: 'read', event: 'start' }
+        data: { tool: "read", event: "start" },
       };
 
-      await request(app).post('/api/events').send(event);
+      await request(app).post("/api/events").send(event);
 
       expect(runTracker.events.length).toBe(1);
-      expect(runTracker.events[0].runId).toBe('stored-run');
+      expect(runTracker.events[0].runId).toBe("stored-run");
     });
   });
 
-  describe('CORS headers', () => {
-    it('should include CORS headers', async () => {
-      const response = await request(app).get('/api/state');
+  describe("CORS headers", () => {
+    it("should include CORS headers", async () => {
+      const response = await request(app).get("/api/state");
 
-      expect(response.headers['access-control-allow-origin']).toBe('*');
+      expect(response.headers["access-control-allow-origin"]).toBe("*");
     });
   });
 });

@@ -1,6 +1,11 @@
 // OpenClaw Runtime Types - Based on openclaw source code analysis
 
-export type AgentEventStream = 'lifecycle' | 'tool' | 'assistant' | 'error' | string;
+export type AgentEventStream =
+  | "lifecycle"
+  | "tool"
+  | "assistant"
+  | "error"
+  | string;
 
 export type AgentEventPayload = {
   runId: string;
@@ -17,7 +22,7 @@ export type AgentRunContext = {
   isHeartbeat?: boolean;
 };
 
-export type RunStatus = 'running' | 'completed' | 'failed' | 'aborted';
+export type RunStatus = "running" | "completed" | "failed" | "aborted";
 
 export type Run = {
   runId: string;
@@ -30,7 +35,7 @@ export type Run = {
   context?: AgentRunContext;
 };
 
-export type SessionScope = 'per-sender' | 'global';
+export type SessionScope = "per-sender" | "global";
 
 export type SessionOrigin = {
   label?: string;
@@ -95,8 +100,11 @@ export type MonitorState = {
 };
 
 export type WSMessage =
-  | { type: 'state'; payload: MonitorState }
-  | { type: 'event'; payload: AgentEventPayload }
-  | { type: 'run_started'; payload: Run }
-  | { type: 'run_completed'; payload: Run }
-  | { type: 'session_updated'; payload: { sessionKey: string; entry: SessionEntry } };
+  | { type: "state"; payload: MonitorState }
+  | { type: "event"; payload: AgentEventPayload }
+  | { type: "run_started"; payload: Run }
+  | { type: "run_completed"; payload: Run }
+  | {
+      type: "session_updated";
+      payload: { sessionKey: string; entry: SessionEntry };
+    };

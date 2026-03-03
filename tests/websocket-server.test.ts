@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { WebSocket } from 'ws';
-import { MonitorWebSocketServer } from '../src/server/websocket-server.js';
-import type { MonitorState, AgentEventPayload, Run, SessionEntry } from '../src/server/types.js';
-import { createServer } from 'http';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { WebSocket } from "ws";
+import { MonitorWebSocketServer } from "../src/server/websocket-server.js";
+import type {
+  MonitorState,
+  AgentEventPayload,
+  Run,
+  SessionEntry,
+} from "../src/server/types.js";
+import { createServer } from "http";
 
 // 生成随机端口，避免测试冲突
 function getAvailablePort(): Promise<number> {
@@ -10,14 +15,14 @@ function getAvailablePort(): Promise<number> {
     const server = createServer();
     server.listen(0, () => {
       const address = server.address();
-      const port = typeof address === 'object' && address ? address.port : 0;
+      const port = typeof address === "object" && address ? address.port : 0;
       server.close(() => resolve(port));
     });
-    server.on('error', reject);
+    server.on("error", reject);
   });
 }
 
-describe('MonitorWebSocketServer', () => {
+describe("MonitorWebSocketServer", () => {
   let server: MonitorWebSocketServer;
   let TEST_PORT: number;
 
@@ -25,36 +30,36 @@ describe('MonitorWebSocketServer', () => {
     TEST_PORT = await getAvailablePort();
     server = new MonitorWebSocketServer(TEST_PORT);
     // 等待服务器启动
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
   afterEach(async () => {
     server.close();
     // 确保端口释放
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
-  describe('connection management', () => {
-    it('should accept WebSocket connections', async () => {
+  describe("connection management", () => {
+    it("should accept WebSocket connections", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('open', () => {
+        client.on("open", () => {
           expect(server.getConnectedClients()).toBe(1);
           client.close();
           resolve();
         });
-        client.on('error', reject);
+        client.on("error", reject);
       });
     });
 
-    it('should track connected clients', async () => {
+    it("should track connected clients", async () => {
       expect(server.getConnectedClients()).toBe(0);
 
       const client1 = new WebSocket(`ws://localhost:${TEST_PORT}`);
       const client2 = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         let openCount = 0;
         const checkOpen = () => {
           openCount++;
@@ -65,39 +70,39 @@ describe('MonitorWebSocketServer', () => {
             resolve();
           }
         };
-        client1.on('open', checkOpen);
-        client2.on('open', checkOpen);
+        client1.on("open", checkOpen);
+        client2.on("open", checkOpen);
       });
     });
 
-    it('should remove client from tracking on disconnect', async () => {
+    it("should remove client from tracking on disconnect", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('open', () => {
+        client.on("open", () => {
           expect(server.getConnectedClients()).toBe(1);
           client.close();
         });
-        client.on('close', () => {
+        client.on("close", () => {
           // 等待服务器处理断开
           setTimeout(() => {
             expect(server.getConnectedClients()).toBe(0);
             resolve();
           }, 50);
         });
-        client.on('error', reject);
+        client.on("error", reject);
       });
     });
   });
 
-  describe('state provider', () => {
-    it('should send initial state to new client', async () => {
+  describe("state provider", () => {
+    it("should send initial state to new client", async () => {
       const mockState: MonitorState = {
         sessions: [],
         runs: [],
         events: [],
         connectedClients: 1,
-        startedAt: Date.now()
+        startedAt: Date.now(),
       };
 
       server.setStateProvider(() => mockState);
@@ -105,20 +110,20 @@ describe('MonitorWebSocketServer', () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('message', (data) => {
+        client.on("message", (data) => {
           const message = JSON.parse(data.toString());
-          expect(message.type).toBe('state');
+          expect(message.type).toBe("state");
           expect(message.payload).toEqual(mockState);
           client.close();
           resolve();
         });
-        client.on('error', reject);
+        client.on("error", reject);
       });
     });
   });
 
-  describe('broadcasting', () => {
-    it('should broadcast state to all clients', async () => {
+  describe("broadcasting", () => {
+    it("should broadcast state to all clients", async () => {
       const client1 = new WebSocket(`ws://localhost:${TEST_PORT}`);
       const client2 = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
@@ -132,29 +137,36 @@ describe('MonitorWebSocketServer', () => {
           if (openCount === 2) {
             const state: MonitorState = {
               sessions: [],
-              runs: [{ runId: 'test-run', status: 'running', startedAt: Date.now(), eventCount: 0 }],
+              runs: [
+                {
+                  runId: "test-run",
+                  status: "running",
+                  startedAt: Date.now(),
+                  eventCount: 0,
+                },
+              ],
               events: [],
               connectedClients: 2,
-              startedAt: Date.now()
+              startedAt: Date.now(),
             };
             server.broadcastState(state);
           }
         };
 
-        client1.on('open', checkOpen);
-        client2.on('open', checkOpen);
+        client1.on("open", checkOpen);
+        client2.on("open", checkOpen);
 
-        client1.on('message', (data) => {
+        client1.on("message", (data) => {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'state' && msg.payload.runs.length > 0) {
+          if (msg.type === "state" && msg.payload.runs.length > 0) {
             messages1.push(msg);
             checkComplete();
           }
         });
 
-        client2.on('message', (data) => {
+        client2.on("message", (data) => {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'state' && msg.payload.runs.length > 0) {
+          if (msg.type === "state" && msg.payload.runs.length > 0) {
             messages2.push(msg);
             checkComplete();
           }
@@ -162,156 +174,156 @@ describe('MonitorWebSocketServer', () => {
 
         const checkComplete = () => {
           if (messages1.length > 0 && messages2.length > 0) {
-            expect(messages1[0].type).toBe('state');
-            expect(messages2[0].type).toBe('state');
+            expect(messages1[0].type).toBe("state");
+            expect(messages2[0].type).toBe("state");
             client1.close();
             client2.close();
             resolve();
           }
         };
 
-        client1.on('error', reject);
-        client2.on('error', reject);
+        client1.on("error", reject);
+        client2.on("error", reject);
 
         // 超时保护
         setTimeout(() => {
-          reject(new Error('Timeout waiting for broadcast'));
+          reject(new Error("Timeout waiting for broadcast"));
         }, 3000);
       });
     });
 
-    it('should broadcast events to all clients', async () => {
+    it("should broadcast events to all clients", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('open', () => {
+        client.on("open", () => {
           const event: AgentEventPayload = {
-            runId: 'run-event-test',
+            runId: "run-event-test",
             seq: 0,
-            stream: 'tool',
+            stream: "tool",
             ts: Date.now(),
-            data: { tool: 'read', event: 'start' },
-            sessionKey: 'session-1'
+            data: { tool: "read", event: "start" },
+            sessionKey: "session-1",
           };
           server.broadcastEvent(event);
         });
 
-        client.on('message', (data) => {
+        client.on("message", (data) => {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'event') {
-            expect(msg.payload.runId).toBe('run-event-test');
+          if (msg.type === "event") {
+            expect(msg.payload.runId).toBe("run-event-test");
             client.close();
             resolve();
           }
         });
 
-        client.on('error', reject);
+        client.on("error", reject);
 
-        setTimeout(() => reject(new Error('Timeout')), 3000);
+        setTimeout(() => reject(new Error("Timeout")), 3000);
       });
     });
 
-    it('should broadcast run_started event', async () => {
+    it("should broadcast run_started event", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('open', () => {
+        client.on("open", () => {
           const run: Run = {
-            runId: 'run-started-test',
-            status: 'running',
+            runId: "run-started-test",
+            status: "running",
             startedAt: Date.now(),
-            eventCount: 0
+            eventCount: 0,
           };
           server.broadcastRunStarted(run);
         });
 
-        client.on('message', (data) => {
+        client.on("message", (data) => {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'run_started') {
-            expect(msg.payload.runId).toBe('run-started-test');
-            expect(msg.payload.status).toBe('running');
+          if (msg.type === "run_started") {
+            expect(msg.payload.runId).toBe("run-started-test");
+            expect(msg.payload.status).toBe("running");
             client.close();
             resolve();
           }
         });
 
-        client.on('error', reject);
+        client.on("error", reject);
 
-        setTimeout(() => reject(new Error('Timeout')), 3000);
+        setTimeout(() => reject(new Error("Timeout")), 3000);
       });
     });
 
-    it('should broadcast run_completed event', async () => {
+    it("should broadcast run_completed event", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('open', () => {
+        client.on("open", () => {
           const run: Run = {
-            runId: 'run-completed-test',
-            status: 'completed',
+            runId: "run-completed-test",
+            status: "completed",
             startedAt: Date.now() - 5000,
             completedAt: Date.now(),
-            eventCount: 5
+            eventCount: 5,
           };
           server.broadcastRunCompleted(run);
         });
 
-        client.on('message', (data) => {
+        client.on("message", (data) => {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'run_completed') {
-            expect(msg.payload.runId).toBe('run-completed-test');
-            expect(msg.payload.status).toBe('completed');
+          if (msg.type === "run_completed") {
+            expect(msg.payload.runId).toBe("run-completed-test");
+            expect(msg.payload.status).toBe("completed");
             client.close();
             resolve();
           }
         });
 
-        client.on('error', reject);
+        client.on("error", reject);
 
-        setTimeout(() => reject(new Error('Timeout')), 3000);
+        setTimeout(() => reject(new Error("Timeout")), 3000);
       });
     });
 
-    it('should broadcast session_updated event', async () => {
+    it("should broadcast session_updated event", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve, reject) => {
-        client.on('open', () => {
+        client.on("open", () => {
           const entry: SessionEntry = {
-            sessionId: 'session-updated-test',
+            sessionId: "session-updated-test",
             updatedAt: Date.now(),
-            model: 'zai/glm-5'
+            model: "zai/glm-5",
           };
-          server.broadcastSessionUpdated('session-key-123', entry);
+          server.broadcastSessionUpdated("session-key-123", entry);
         });
 
-        client.on('message', (data) => {
+        client.on("message", (data) => {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'session_updated') {
-            expect(msg.payload.sessionKey).toBe('session-key-123');
-            expect(msg.payload.entry.sessionId).toBe('session-updated-test');
+          if (msg.type === "session_updated") {
+            expect(msg.payload.sessionKey).toBe("session-key-123");
+            expect(msg.payload.entry.sessionId).toBe("session-updated-test");
             client.close();
             resolve();
           }
         });
 
-        client.on('error', reject);
+        client.on("error", reject);
 
-        setTimeout(() => reject(new Error('Timeout')), 3000);
+        setTimeout(() => reject(new Error("Timeout")), 3000);
       });
     });
   });
 
-  describe('error handling', () => {
-    it('should handle client errors gracefully', async () => {
+  describe("error handling", () => {
+    it("should handle client errors gracefully", async () => {
       const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
 
       await new Promise<void>((resolve) => {
-        client.on('open', () => {
+        client.on("open", () => {
           expect(server.getConnectedClients()).toBe(1);
           // 强制关闭连接
           client.terminate();
-          
+
           // 等待服务器处理错误
           setTimeout(() => {
             expect(server.getConnectedClients()).toBe(0);

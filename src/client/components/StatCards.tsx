@@ -5,7 +5,12 @@ type StatCardsProps = {
   activeRuns: number;
 };
 
-export function StatCards({ sessions, runs, events, activeRuns }: StatCardsProps) {
+export function StatCards({
+  sessions,
+  runs,
+  events,
+  activeRuns,
+}: StatCardsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
@@ -36,7 +41,9 @@ export function StatCards({ sessions, runs, events, activeRuns }: StatCardsProps
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-600">Active Runs</p>
-            <p className="text-3xl font-bold text-slate-900 mt-1">{activeRuns}</p>
+            <p className="text-3xl font-bold text-slate-900 mt-1">
+              {activeRuns}
+            </p>
           </div>
           <div className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl bg-yellow-50 text-yellow-600">
             🔥

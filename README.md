@@ -4,25 +4,30 @@
 
 ## 🚀 快速开始
 
-### 启动服务
+### 开发模式
 
 ```bash
 cd ~/.openclaw/workspace/projects/openclaw-monitor
 npm run dev
 ```
 
-服务启动后：
-- **Web 界面**：http://localhost:5174/
-- **API 服务**：http://localhost:3011/api/state
-- **WebSocket**：ws://localhost:3012
+开发模式启动两个服务：
+- **前端开发服务器**：http://localhost:5174/（Vite，热更新）
+- **API 服务**：http://localhost:3011/
+- **WebSocket**：ws://localhost:3012/
 
-### 使用 PM2 后台运行
+### 生产模式
 
 ```bash
-pm2 start ecosystem.config.cjs
-pm2 list  # 查看状态
-pm2 logs openclaw-monitor-server  # 查看日志
+npm run build
+npm start
+# 或使用 PM2
+pm2 start npm --name "openclaw-monitor" -- start
 ```
+
+生产模式所有服务在 3011 端口：
+- **Web 界面 + API**：http://localhost:3011/
+- **WebSocket**：ws://localhost:3012/
 
 ## 📊 功能特性
 
@@ -89,9 +94,35 @@ openclaw-monitor/
 ### 运行测试
 
 ```bash
+# 运行所有测试
 npm test
+
+# 监听模式
 npm run test:watch
+
+# 生成覆盖率报告
+npm run test:coverage
 ```
+
+### 测试覆盖
+
+项目使用 Vitest 进行自动化测试：
+
+| 模块 | 测试文件 | 测试数 |
+|------|----------|--------|
+| HTTP API | `tests/api.test.ts` | 17 |
+| WebSocket | `tests/websocket-server.test.ts` | 10 |
+| 日志解析 | `tests/log-watcher.test.ts` | 7 |
+| Run 追踪 | `tests/run-tracker.test.ts` | 6 |
+| 事件协调 | `tests/event-coordinator.test.ts` | 8 |
+| 数据竞争 | `tests/race-condition.test.ts` | 9 |
+
+详细测试计划见 [docs/test-plan.md](docs/test-plan.md)
+
+### CI/CD
+
+- **GitHub Actions**: 每次 push 和 PR 自动运行测试
+- **Pre-commit Hook**: 提交前自动运行测试，失败则阻止提交
 
 ## 📝 注意事项
 

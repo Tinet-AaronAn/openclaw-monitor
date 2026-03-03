@@ -1,4 +1,4 @@
-import type { Run, AgentEventPayload } from './types.js';
+import type { Run, AgentEventPayload } from "./types.js";
 
 export class RunTracker {
   private runs: Map<string, Run> = new Map();
@@ -23,7 +23,7 @@ export class RunTracker {
       run = {
         runId: event.runId,
         sessionKey: event.sessionKey,
-        status: 'running',
+        status: "running",
         startedAt: event.ts,
         eventCount: 0,
         lastEvent: event,
@@ -36,16 +36,16 @@ export class RunTracker {
     run.lastEvent = event;
 
     // Check for lifecycle events to update status
-    if (event.stream === 'lifecycle') {
+    if (event.stream === "lifecycle") {
       const lifecycleEvent = event.data as { event?: string };
-      if (lifecycleEvent.event === 'run_completed') {
-        run.status = 'completed';
+      if (lifecycleEvent.event === "run_completed") {
+        run.status = "completed";
         run.completedAt = event.ts;
-      } else if (lifecycleEvent.event === 'run_failed') {
-        run.status = 'failed';
+      } else if (lifecycleEvent.event === "run_failed") {
+        run.status = "failed";
         run.completedAt = event.ts;
-      } else if (lifecycleEvent.event === 'run_aborted') {
-        run.status = 'aborted';
+      } else if (lifecycleEvent.event === "run_aborted") {
+        run.status = "aborted";
         run.completedAt = event.ts;
       }
     }
@@ -74,7 +74,7 @@ export class RunTracker {
   }
 
   getActiveRuns(): Run[] {
-    return Array.from(this.runs.values()).filter((r) => r.status === 'running');
+    return Array.from(this.runs.values()).filter((r) => r.status === "running");
   }
 
   getRecentRuns(limit: number = 50): Run[] {

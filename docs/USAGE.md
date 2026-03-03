@@ -4,15 +4,30 @@
 
 ### 启动监控应用
 
+**开发模式：**
 ```bash
 cd ~/.openclaw/workspace/projects/openclaw-monitor
 npm run dev
 ```
 
+**生产模式：**
+```bash
+npm run build
+npm start
+# 或使用 PM2
+pm2 start npm --name "openclaw-monitor" -- start
+```
+
 ### 访问界面
 
-- **前端界面**: http://localhost:5174/
+**开发模式：**
+- **前端开发服务器**: http://localhost:5174/（Vite，热更新）
 - **API**: http://localhost:3011/api/state
+- **WebSocket**: ws://localhost:3012/
+
+**生产模式：**
+- **所有服务（Web + API）**: http://localhost:3011/
+- **WebSocket**: ws://localhost:3012/
 
 ## 功能说明
 

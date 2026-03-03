@@ -1,40 +1,48 @@
-import express from 'express';
-import { createServer } from 'http';
-import { config } from 'dotenv';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { SessionMonitor } from './session-monitor.js';
-import { RunTracker } from './run-tracker.js';
-import { MonitorWebSocketServer } from './websocket-server.js';
-import { OpenClawLogWatcher } from './log-watcher.js';
-import { SessionFileWatcher } from './session-file-watcher.js';
-import { EventCoordinator } from './event-coordinator.js';
-import { OpenClawCLI } from './openclaw-cli.js';
-import type { MonitorState } from './types.js';
+import express from "express";
+import { createServer } from "http";
+import { config } from "dotenv";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+import { SessionMonitor } from "./session-monitor.js";
+import { RunTracker } from "./run-tracker.js";
+import { MonitorWebSocketServer } from "./websocket-server.js";
+import { OpenClawLogWatcher } from "./log-watcher.js";
+import { SessionFileWatcher } from "./session-file-watcher.js";
+import { EventCoordinator } from "./event-coordinator.js";
+import { OpenClawCLI } from "./openclaw-cli.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-config({ path: resolve(__dirname, '../../.env') });
+config({ path: resolve(__dirname, "../../.env") });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3011;
 const WS_PORT = process.env.WS_PORT ? parseInt(process.env.WS_PORT, 10) : 3012;
-const SESSIONS_DIR = process.env.OPENCLAW_SESSIONS_DIR || resolve(process.env.HOME!, '.openclaw/sessions');
-const ENABLE_LOG_WATCHER = process.env.ENABLE_LOG_WATCHER !== 'false';
-const ENABLE_CLI_POLLING = process.env.ENABLE_CLI_POLLING !== 'false';
-const CLI_POLL_INTERVAL = parseInt(process.env.CLI_POLL_INTERVAL || '5000', 10);
+const SESSIONS_DIR =
+  process.env.OPENCLAW_SESSIONS_DIR ||
+  resolve(process.env.HOME!, ".openclaw/sessions");
+const ENABLE_LOG_WATCHER = process.env.ENABLE_LOG_WATCHER !== "false";
+const ENABLE_CLI_POLLING = process.env.ENABLE_CLI_POLLING !== "false";
+const CLI_POLL_INTERVAL = parseInt(process.env.CLI_POLL_INTERVAL || "5000", 10);
 
 const app = express();
 const server = createServer(app);
 
+// 内存中的 sessions 存储（需要在使用前定义）
+const sessionsStore = new Map<string, any>();
+
 // Middleware
 app.use(express.json());
 app.use((_req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
+
+// 静态文件服务（前端页面）
+const clientDistPath = resolve(__dirname, "../client");
+app.use(express.static(clientDistPath));
 
 // Components
 const sessionMonitor = new SessionMonitor(SESSIONS_DIR);
@@ -45,11 +53,23 @@ const sessionFileWatcher = new SessionFileWatcher();
 const eventCoordinator = new EventCoordinator();
 const openclawCLI = new OpenClawCLI();
 
-// 内存中的 sessions 存储
-const sessionsStore = new Map<string, any>();
+// 设置 WebSocket 状态提供者
+wsServer.setStateProvider(() => ({
+  sessions: Array.from(sessionsStore.entries()).map(([k, v]) => ({
+    sessionKey: k,
+    ...v,
+  })),
+  runs: Array.from(runTracker.getRuns().entries()).map(([k, v]) => ({
+    ...v,
+    runId: k,
+  })),
+  events: runTracker.getEvents().slice(-100),
+  connectedClients: wsServer.getConnectedClients(),
+  startedAt: Date.now(),
+}));
 
 // API Routes
-app.get('/api/sessions', (_req, res) => {
+app.get("/api/sessions", (_req, res) => {
   const sessions = Array.from(sessionsStore.entries()).map(([key, entry]) => ({
     sessionKey: key,
     ...entry,
@@ -57,64 +77,64 @@ app.get('/api/sessions', (_req, res) => {
   res.json(sessions);
 });
 
-app.get('/api/sessions/:sessionKey', (req, res) => {
+app.get("/api/sessions/:sessionKey", (req, res) => {
   const entry = sessionsStore.get(req.params.sessionKey);
   if (!entry) {
-    res.status(404).json({ error: 'Session not found' });
+    res.status(404).json({ error: "Session not found" });
     return;
   }
   res.json({ sessionKey: req.params.sessionKey, ...entry });
 });
 
-app.get('/api/runs', (_req, res) => {
+app.get("/api/runs", (_req, res) => {
   const runs = runTracker.getRecentRuns(50);
   res.json(runs);
 });
 
-app.get('/api/runs/:runId', (req, res) => {
+app.get("/api/runs/:runId", (req, res) => {
   const run = runTracker.getRun(req.params.runId);
   if (!run) {
-    res.status(404).json({ error: 'Run not found' });
+    res.status(404).json({ error: "Run not found" });
     return;
   }
   res.json(run);
 });
 
-app.get('/api/runs/:runId/events', (req, res) => {
+app.get("/api/runs/:runId/events", (req, res) => {
   const events = runTracker.getEventsForRun(req.params.runId);
   res.json(events);
 });
 
-app.get('/api/events', (req, res) => {
+app.get("/api/events", (req, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
   const events = runTracker.getEvents().slice(-limit);
   res.json(events);
 });
 
-app.get('/api/state', (_req, res) => {
-  const state: MonitorState = {
-    sessions: sessionsStore,
-    runs: runTracker.getRuns(),
+app.get("/api/state", (_req, res) => {
+  const state = {
+    sessions: Array.from(sessionsStore.entries()).map(([k, v]) => ({
+      sessionKey: k,
+      ...v,
+    })),
+    runs: Array.from(runTracker.getRuns().entries()).map(([k, v]) => ({
+      ...v,
+      runId: k,
+    })),
     events: runTracker.getEvents().slice(-100),
     connectedClients: wsServer.getConnectedClients(),
     startedAt: Date.now(),
   };
-  res.json({
-    sessions: Array.from(state.sessions.entries()).map(([k, v]) => ({ sessionKey: k, ...v })),
-    runs: Array.from(state.runs.entries()).map(([k, v]) => ({ ...v, runId: k })),
-    events: state.events,
-    connectedClients: state.connectedClients,
-    startedAt: state.startedAt,
-  });
+  res.json(state);
 });
 
 // Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: Date.now() });
 });
 
 // 接收来自桥接脚本的事件
-app.post('/api/events', (req, res) => {
+app.post("/api/events", (req, res) => {
   const event = req.body;
 
   // 处理事件
@@ -125,23 +145,23 @@ app.post('/api/events', (req, res) => {
 
   console.log(`[Event] ${event.stream} - Run: ${event.runId.slice(-8)}`);
 
-  res.json({ status: 'ok', eventId: `${event.runId}-${event.seq}` });
+  res.json({ status: "ok", eventId: `${event.runId}-${event.seq}` });
 });
 
 // 重放当天日志（修复数据准确性）
-app.post('/api/replay', async (_req, res) => {
+app.post("/api/replay", async (_req, res) => {
   try {
     const result = await logWatcher.replayLogs();
     res.json({
-      status: 'ok',
-      message: 'Log replay completed',
-      ...result
+      status: "ok",
+      message: "Log replay completed",
+      ...result,
     });
   } catch (error) {
     res.status(500).json({
-      status: 'error',
-      message: 'Log replay failed',
-      error: (error as Error).message
+      status: "error",
+      message: "Log replay failed",
+      error: (error as Error).message,
     });
   }
 });
@@ -158,13 +178,34 @@ if (ENABLE_LOG_WATCHER) {
     // 尝试增强事件（添加工具参数）
     const toolCallId = (event.data as any)?.toolCallId;
     const enrichedEvent = eventCoordinator.enrichEvent(event, toolCallId);
-    
+
     const run = runTracker.processEvent(enrichedEvent);
     wsServer.broadcastEvent(enrichedEvent);
 
     // 检查是否是新 Run
-    if (event.seq === 0 || event.data.event === 'run_started') {
+    if (event.seq === 0 || event.data.event === "run_started") {
       wsServer.broadcastRunStarted(run);
+    }
+  });
+
+  // 当发现新 session 时更新 sessionsStore
+  logWatcher.setSessionCallback((sessionKey, sessionId) => {
+    if (!sessionsStore.has(sessionKey)) {
+      const entry: any = {
+        sessionId,
+        updatedAt: Date.now(),
+        chatType: sessionKey.includes(":group:") ? "group" : "direct",
+        channel: sessionKey.includes("dingtalk")
+          ? "dingtalk"
+          : sessionKey.includes("telegram")
+            ? "telegram"
+            : sessionKey.includes("webchat")
+              ? "webchat"
+              : "unknown",
+      };
+      sessionsStore.set(sessionKey, entry);
+      wsServer.broadcastSessionUpdated(sessionKey, entry);
+      console.log(`[LogWatcher] Added session: ${sessionKey.slice(0, 40)}...`);
     }
   });
 }
@@ -178,10 +219,29 @@ sessionFileWatcher.setEventCallback((event) => {
       toolData.toolCallId,
       toolData.tool,
       toolData.rawArgs,
-      toolData.args
+      toolData.args,
     );
   }
 });
+
+// Setup session file watcher message callback
+sessionFileWatcher.setSessionMessageCallback(
+  (sessionId, message, sender, time) => {
+    // 找到对应的 sessionKey
+    for (const [sessionKey, entry] of sessionsStore.entries()) {
+      if (entry.sessionId === sessionId) {
+        // 更新 session 的最后消息
+        entry.lastMessage = message;
+        entry.lastMessageSender = sender;
+        entry.lastMessageTime = time;
+
+        // 广播更新
+        wsServer.broadcastSessionUpdated(sessionKey, entry);
+        break;
+      }
+    }
+  },
+);
 
 // 定期轮询 OpenClaw CLI 获取 sessions
 if (ENABLE_CLI_POLLING) {
@@ -195,7 +255,7 @@ if (ENABLE_CLI_POLLING) {
         wsServer.broadcastSessionUpdated(session.sessionKey, session as any);
       }
     } catch (error) {
-      console.error('[CLI Polling] Failed:', error);
+      console.error("[CLI Polling] Failed:", error);
     }
   }, CLI_POLL_INTERVAL);
 }
@@ -209,15 +269,15 @@ setInterval(() => {
 // For now, we'll use a demo mode that generates sample events
 function generateDemoEvents(): void {
   const runId = `run-${Date.now()}`;
-  const sessionKey = 'demo-session';
+  const sessionKey = "demo-session";
 
   // Start event
   const startEvent = {
     runId,
     seq: 0,
-    stream: 'lifecycle' as const,
+    stream: "lifecycle" as const,
     ts: Date.now(),
-    data: { event: 'run_started' },
+    data: { event: "run_started" },
     sessionKey,
   };
   const run = runTracker.processEvent(startEvent);
@@ -228,9 +288,9 @@ function generateDemoEvents(): void {
     const toolEvent = {
       runId,
       seq: 1,
-      stream: 'tool' as const,
+      stream: "tool" as const,
       ts: Date.now(),
-      data: { tool: 'read', args: { file: 'example.txt' } },
+      data: { tool: "read", args: { file: "example.txt" } },
       sessionKey,
     };
     runTracker.processEvent(toolEvent);
@@ -242,9 +302,9 @@ function generateDemoEvents(): void {
     const assistantEvent = {
       runId,
       seq: 2,
-      stream: 'assistant' as const,
+      stream: "assistant" as const,
       ts: Date.now(),
-      data: { message: 'Hello, I read the file!' },
+      data: { message: "Hello, I read the file!" },
       sessionKey,
     };
     runTracker.processEvent(assistantEvent);
@@ -256,9 +316,9 @@ function generateDemoEvents(): void {
     const completeEvent = {
       runId,
       seq: 3,
-      stream: 'lifecycle' as const,
+      stream: "lifecycle" as const,
       ts: Date.now(),
-      data: { event: 'run_completed' },
+      data: { event: "run_completed" },
       sessionKey,
     };
     const completedRun = runTracker.processEvent(completeEvent);
@@ -270,19 +330,21 @@ function generateDemoEvents(): void {
 async function start(): Promise<void> {
   try {
     await sessionMonitor.start();
-    console.log('Session monitor started');
+    console.log("Session monitor started");
 
     if (ENABLE_LOG_WATCHER) {
       logWatcher.start();
-      console.log('OpenClaw log watcher started');
+      console.log("OpenClaw log watcher started");
     }
 
     // 启动 session file watcher
     sessionFileWatcher.start();
-    console.log('Session file watcher started');
+    console.log("Session file watcher started");
 
     if (ENABLE_CLI_POLLING) {
-      console.log(`OpenClaw CLI polling enabled (interval: ${CLI_POLL_INTERVAL}ms)`);
+      console.log(
+        `OpenClaw CLI polling enabled (interval: ${CLI_POLL_INTERVAL}ms)`,
+      );
     }
 
     server.listen(PORT, () => {
@@ -290,20 +352,20 @@ async function start(): Promise<void> {
       console.log(`WebSocket server running at ws://localhost:${WS_PORT}`);
 
       // Demo mode - generate events every 5 seconds
-      if (process.env.DEMO_MODE === 'true') {
-        console.log('Demo mode enabled - generating sample events');
+      if (process.env.DEMO_MODE === "true") {
+        console.log("Demo mode enabled - generating sample events");
         setInterval(generateDemoEvents, 5000);
       }
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error("Failed to start server:", error);
     process.exit(1);
   }
 }
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down...');
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down...");
   sessionMonitor.stop();
   logWatcher.stop();
   sessionFileWatcher.stop();
@@ -316,7 +378,6 @@ start();
 
 // CLI Polling
 if (ENABLE_CLI_POLLING) {
-  const { startCLIPolling } = await import('./index-cli-polling.js');
+  const { startCLIPolling } = await import("./index-cli-polling.js");
   startCLIPolling(wsServer, CLI_POLL_INTERVAL);
 }
-

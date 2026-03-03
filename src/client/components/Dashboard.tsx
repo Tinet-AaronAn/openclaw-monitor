@@ -1,15 +1,15 @@
-import type { MonitorState } from '../types';
-import { StatCard } from './StatCard';
-import { SessionsView } from './SessionsView';
-import { RunsView } from './RunsView';
-import { EventsStream } from './EventsStream';
+import type { MonitorState } from "../types";
+import { StatCard } from "./StatCard";
+import { SessionsView } from "./SessionsView";
+import { RunsView } from "./RunsView";
+import { EventsStream } from "./EventsStream";
 
 type DashboardProps = {
   state: MonitorState;
 };
 
 export function Dashboard({ state }: DashboardProps) {
-  const activeRuns = state.runs.filter((r) => r.status === 'running').length;
+  const activeRuns = state.runs.filter((r) => r.status === "running").length;
   const totalSessions = state.sessions.length;
   const totalEvents = state.events.length;
 

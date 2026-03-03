@@ -1,5 +1,5 @@
-import type { Session } from '../types';
-import { formatDistanceToNow } from 'date-fns';
+import type { Session } from "../types";
+import { formatDistanceToNow } from "date-fns";
 
 type SessionsViewProps = {
   sessions: Session[];
@@ -8,9 +8,7 @@ type SessionsViewProps = {
 export function SessionsView({ sessions }: SessionsViewProps) {
   if (sessions.length === 0) {
     return (
-      <div className="p-4 text-center text-slate-500">
-        No sessions found
-      </div>
+      <div className="p-4 text-center text-slate-500">No sessions found</div>
     );
   }
 

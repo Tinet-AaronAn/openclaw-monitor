@@ -1,0 +1,19 @@
+#!/bin/sh
+# Pre-commit hook - runs tests before allowing commits
+
+echo "🧪 Running pre-commit tests..."
+
+# Run the test suite
+npm run test
+
+# Check the exit code
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ Tests failed. Commit blocked."
+  echo "Please fix the failing tests before committing."
+  exit 1
+fi
+
+echo ""
+echo "✅ All tests passed. Proceeding with commit."
+exit 0

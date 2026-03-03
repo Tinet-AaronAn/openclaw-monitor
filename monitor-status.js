@@ -5,6 +5,8 @@
  */
 
 const API_URL = 'http://localhost:3011';
+// 生产模式：所有服务在 3011 端口
+// 开发模式：前端 5174，API 3011
 
 async function generateReport() {
   const response = await fetch(`${API_URL}/api/state`);
@@ -51,7 +53,7 @@ ${state.events.slice(-5).reverse().map(event => {
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   📅 更新时间: ${new Date().toLocaleString('zh-CN')}
-  🌐 Web 界面: http://localhost:5174/
+  🌐 Web 界面: http://localhost:3011/
   🔌 API 服务: http://localhost:3011/api/state
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `);

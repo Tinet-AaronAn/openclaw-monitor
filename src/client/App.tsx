@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { useMonitor } from './hooks/useMonitor';
-import { SessionList } from './components/SessionList';
-import { RunList } from './components/RunList';
-import { EventList } from './components/EventList';
-import { StatCards } from './components/StatCards';
+import { useState } from "react";
+import { useMonitor } from "./hooks/useMonitor";
+import { SessionList } from "./components/SessionList";
+import { RunList } from "./components/RunList";
+import { EventList } from "./components/EventList";
+import { StatCards } from "./components/StatCards";
 
 export function App() {
   const { state, connected } = useMonitor();
@@ -12,15 +12,15 @@ export function App() {
 
   // 过滤出选中 session 的 runs
   const filteredRuns = selectedSession
-    ? state.runs.filter(r => r.sessionKey === selectedSession)
+    ? state.runs.filter((r) => r.sessionKey === selectedSession)
     : state.runs;
 
   // 过滤出选中 run 的 events
   const filteredEvents = selectedRun
-    ? state.events.filter(e => e.runId === selectedRun)
+    ? state.events.filter((e) => e.runId === selectedRun)
     : [];
 
-  const activeRuns = state.runs.filter(r => r.status === 'running').length;
+  const activeRuns = state.runs.filter((r) => r.status === "running").length;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -28,21 +28,23 @@ export function App() {
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
             <div className="text-2xl">🦞</div>
-            <h1 className="text-xl font-bold text-slate-900">OpenClaw Monitor</h1>
+            <h1 className="text-xl font-bold text-slate-900">
+              OpenClaw Monitor
+            </h1>
           </div>
           <div className="flex items-center gap-4 text-sm">
             <div className="flex items-center gap-2">
               <div
                 className={`w-2 h-2 rounded-full ${
-                  connected ? 'bg-green-500' : 'bg-red-500'
+                  connected ? "bg-green-500" : "bg-red-500"
                 }`}
               />
               <span className="text-slate-600">
-                {connected ? 'Connected' : 'Disconnected'}
+                {connected ? "Connected" : "Disconnected"}
               </span>
             </div>
             <div className="text-slate-500">
-              {activeRuns} active run{activeRuns !== 1 ? 's' : ''}
+              {activeRuns} active run{activeRuns !== 1 ? "s" : ""}
             </div>
           </div>
         </div>
@@ -114,7 +116,10 @@ export function App() {
             <div className="bg-white rounded-lg shadow-sm border border-slate-200">
               <div className="px-4 py-3 border-b border-slate-200">
                 <h2 className="font-semibold text-slate-900">
-                  Runs {selectedSession ? `(${filteredRuns.length})` : `(${state.runs.length})`}
+                  Runs{" "}
+                  {selectedSession
+                    ? `(${filteredRuns.length})`
+                    : `(${state.runs.length})`}
                 </h2>
               </div>
               <RunList
@@ -130,11 +135,15 @@ export function App() {
             <div className="bg-white rounded-lg shadow-sm border border-slate-200">
               <div className="px-4 py-3 border-b border-slate-200">
                 <h2 className="font-semibold text-slate-900">
-                  Events {selectedRun ? `(${filteredEvents.length})` : ''}
+                  Events {selectedRun ? `(${filteredEvents.length})` : ""}
                 </h2>
               </div>
               <EventList
-                events={selectedRun ? filteredEvents : state.events.slice(-20).reverse()}
+                events={
+                  selectedRun
+                    ? filteredEvents
+                    : state.events.slice(-20).reverse()
+                }
                 selectedRun={selectedRun}
               />
             </div>

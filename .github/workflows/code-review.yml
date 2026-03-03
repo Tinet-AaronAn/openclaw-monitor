@@ -40,10 +40,119 @@ jobs:
           echo "files<<EOF" >> $GITHUB_OUTPUT
           cat changed-files.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
+
           # 获取 diff 统计
           echo "stats<<EOF" >> $GITHUB_OUTPUT
           git diff --stat origin/main...HEAD >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Analyze code for annotations
+        id: annotations
+        run: |
+          # 创建 Node.js 脚本分析代码
+          cat > analyze-code.js << 'EOF'
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          const annotations = [];
+          const suggestions = [];
+
+          // 获取变更的文件
+          const changedFiles = fs.readFileSync('changed-files.txt', 'utf-8')
+            .split('\n')
+            .filter(f => f.trim());
+
+          // 分析每个文件
+          changedFiles.forEach(file => {
+            if (!file.endsWith('.ts') && !file.endsWith('.tsx')) return;
+
+            try {
+              // 获取文件 diff
+              const diff = execSync(`git diff origin/main...HEAD -- ${file}`, { encoding: 'utf-8' });
+              const lines = diff.split('\n');
+
+              let lineNumber = 0;
+              lines.forEach((line, idx) => {
+                // 检测潜在问题
+
+                // 1. console.log 残留
+                if (line.includes('+') && line.includes('console.log')) {
+                  const match = line.match(/^@@.*\+(\d+)/);
+                  if (match) {
+                    annotations.push({
+                      path: file,
+                      start_line: parseInt(match[1]),
+                      end_line: parseInt(match[1]),
+                      annotation_level: 'warning',
+                      message: '检测到 console.log，建议在提交前移除',
+                      title: '🟡 Console 语句'
+                    });
+                  }
+                }
+
+                // 2. TODO 注释
+                if (line.includes('+') && line.toLowerCase().includes('todo')) {
+                  const match = line.match(/^@@.*\+(\d+)/);
+                  if (match) {
+                    annotations.push({
+                      path: file,
+                      start_line: parseInt(match[1]),
+                      end_line: parseInt(match[1]),
+                      annotation_level: 'notice',
+                      message: '检测到 TODO 注释，请确保跟踪此任务',
+                      title: '📝 TODO 注释'
+                    });
+                  }
+                }
+
+                // 3. any 类型
+                if (line.includes('+') && line.includes(': any')) {
+                  const match = line.match(/^@@.*\+(\d+)/);
+                  if (match) {
+                    annotations.push({
+                      path: file,
+                      start_line: parseInt(match[1]),
+                      end_line: parseInt(match[1]),
+                      annotation_level: 'warning',
+                      message: '使用 any 类型会降低类型安全性，建议使用具体类型',
+                      title: '⚠️ Any 类型'
+                    });
+                  }
+                }
+
+                // 4. 硬编码密钥
+                if (line.includes('+') && /(password|secret|token|key)\s*[=:]\s*['"]\w+['"]/.test(line.toLowerCase())) {
+                  const match = line.match(/^@@.*\+(\d+)/);
+                  if (match) {
+                    annotations.push({
+                      path: file,
+                      start_line: parseInt(match[1]),
+                      end_line: parseInt(match[1]),
+                      annotation_level: 'failure',
+                      message: '🚨 检测到硬编码的密钥，请使用环境变量',
+                      title: '🔒 安全问题'
+                    });
+                  }
+                }
+              });
+            } catch (e) {
+              // 忽略错误
+            }
+          });
+
+          // 限制最多 50 个 annotations（GitHub API 限制）
+          const limitedAnnotations = annotations.slice(0, 50);
+
+          console.log(JSON.stringify(limitedAnnotations, null, 2));
+          fs.writeFileSync('annotations.json', JSON.stringify(limitedAnnotations));
+          EOF
+
+          # 运行分析脚本
+          node analyze-code.js
+
+          # 保存 annotations 到输出
+          echo "annotations<<EOF" >> $GITHUB_OUTPUT
+          cat annotations.json >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Analyze code changes
@@ -52,62 +161,62 @@ jobs:
           # 创建分析报告
           cat > analysis.md << 'MARKDOWN'
           ## 🔍 严审 Code Review Report
-          
+
           **PR**: #${{ github.event.pull_request.number }}
           **Author**: ${{ github.event.pull_request.user.login }}
           **Branch**: ${{ github.head_ref }}
-          
+
           ### 📊 变更统计
           ```
           ${{ steps.diff.outputs.stats }}
           ```
-          
+
           ### 📁 变更文件
           <details>
           <summary>点击查看文件列表</summary>
-          
+
           ```
           ${{ steps.diff.outputs.files }}
           ```
           </details>
-          
+
           ### ✅ 检查清单
-          
+
           #### 1. 代码质量
           - [ ] 代码风格一致性
           - [ ] 命名规范
           - [ ] 注释和文档
           - [ ] 无重复代码
-          
+
           #### 2. 安全性
           - [ ] 无 XSS 漏洞
           - [ ] 无敏感信息泄露
           - [ ] 输入验证完善
           - [ ] 权限检查
-          
+
           #### 3. 测试覆盖
           - [ ] 单元测试充分
           - [ ] 边界条件覆盖
           - [ ] 集成测试
           - [ ] E2E 测试（如适用）
-          
+
           #### 4. 架构设计
           - [ ] 模块职责清晰
           - [ ] 依赖关系合理
           - [ ] 无循环依赖
           - [ ] 接口设计合理
-          
+
           ### 🎯 审查结论
-          
+
           **状态**: ✅ 通过 / ⚠️ 需修改 / ❌ 阻止合并
-          
-          **说明**: 
+
+          **说明**:
           此为自动化审查，建议安老师最终确认。
-          
+
           ---
           *Generated by 严审 (Code Review Agent) - OpenClaw*
           MARKDOWN
-          
+
           echo "report<<EOF" >> $GITHUB_OUTPUT
           cat analysis.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -124,7 +233,7 @@ jobs:
             echo "❌ 类型检查失败" >> analysis.md
             echo "typecheck=fail" >> $GITHUB_OUTPUT
           fi
-          
+
           # 运行测试
           echo "" >> analysis.md
           echo "## 测试结果" >> analysis.md
@@ -135,7 +244,7 @@ jobs:
             echo "❌ 测试失败" >> analysis.md
             echo "test=fail" >> $GITHUB_OUTPUT
           fi
-          
+
           # 代码格式检查
           echo "" >> analysis.md
           echo "## 代码格式" >> analysis.md
@@ -153,34 +262,44 @@ jobs:
           # 判断最终结果
           TYPECHECK="${{ steps.checks.outputs.typecheck }}"
           TEST="${{ steps.checks.outputs.test }}"
-          
+
           if [ "$TYPECHECK" = "fail" ] || [ "$TEST" = "fail" ]; then
             echo "conclusion=failure" >> $GITHUB_OUTPUT
             echo "status=❌ 阻止合并" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
             echo "" >> analysis.md
             echo "## 最终结论" >> analysis.md
             echo "**❌ 阻止合并** - 存在必须修复的问题" >> analysis.md
           elif [ "$TYPECHECK" = "pass" ] && [ "$TEST" = "pass" ]; then
             echo "conclusion=success" >> $GITHUB_OUTPUT
             echo "status=✅ 通过" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
             echo "" >> analysis.md
             echo "## 最终结论" >> analysis.md
             echo "**✅ 通过** - 建议合并" >> analysis.md
           else
             echo "conclusion=neutral" >> $GITHUB_OUTPUT
             echo "status=⚠️ 需人工审查" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
             echo "" >> analysis.md
             echo "## 最终结论" >> analysis.md
             echo "**⚠️ 需人工审查** - 建议安老师最终确认" >> analysis.md
           fi
 
-      - name: Create Check Run
+      - name: Create Check Run with Annotations
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('analysis.md', 'utf8');
-            
+            let annotations = [];
+
+            try {
+              annotations = JSON.parse(fs.readFileSync('annotations.json', 'utf8'));
+            } catch (e) {
+              console.log('No annotations found');
+            }
+
             const check = await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -191,11 +310,12 @@ jobs:
               output: {
                 title: '${{ steps.result.outputs.status }}',
                 summary: report,
-                annotations: []
+                annotations: annotations
               }
             });
-            
+
             console.log('Check Run created:', check.data.id);
+            console.log('Annotations count:', annotations.length);
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -203,18 +323,18 @@ jobs:
           script: |
             const fs = require('fs');
             const report = fs.readFileSync('analysis.md', 'utf8');
-            
+
             // 查找是否已有严审评论
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number
             });
-            
-            const botComment = comments.data.find(comment => 
+
+            const botComment = comments.data.find(comment =>
               comment.body.includes('严审 Code Review Report')
             );
-            
+
             if (botComment) {
               // 更新现有评论
               await github.rest.issues.updateComment({
@@ -232,6 +352,38 @@ jobs:
                 body: report
               });
             }
+
+      - name: Send DingTalk notification
+        if: always()
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: |
+          if [ -z "$DINGTALK_WEBHOOK" ]; then
+            echo "DINGTALK_WEBHOOK not configured, skipping notification"
+            exit 0
+          fi
+
+          # 构建钉钉消息
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          PR_BRANCH="${{ github.head_ref }}"
+          STATUS="${{ steps.result.outputs.status }}"
+          EMOJI="${{ steps.result.outputs.emoji }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+
+          # 发送钉钉消息
+          curl -X POST "$DINGTALK_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"title\": \"严审完成: PR #${PR_NUMBER}\",
+                \"text\": \"## 🔍 严审完成: PR #${PR_NUMBER}\\n\\n**状态**: ${EMOJI} ${STATUS}\\n\\n**作者**: ${PR_AUTHOR}\\n\\n**分支**: ${PR_BRANCH}\\n\\n**标题**: ${PR_TITLE}\\n\\n**详情**: [查看 PR](${PR_URL})\\n\\n---\\n🦞 随行 OpenClaw\"
+              }
+            }"
+
+          echo "DingTalk notification sent"
 
       - name: Fail if checks failed
         if: steps.result.outputs.conclusion == 'failure'

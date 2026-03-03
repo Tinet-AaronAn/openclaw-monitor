@@ -85,6 +85,61 @@
 - Node.js 版本矩阵测试 (20.x, 22.x)
 - 代码覆盖率报告
 
+### 3. Code Review Annotations (代码行级别建议)
+
+**功能**:
+- 自动检测代码中的潜在问题
+- 在具体代码行添加注释
+- 支持多种检测规则
+
+**检测项**:
+| 类型 | 说明 | 严重程度 |
+|------|------|----------|
+| 🟡 **Console 语句** | 检测 console.log 残留 | Warning |
+| 📝 **TODO 注释** | 检测 TODO 注释 | Notice |
+| ⚠️ **Any 类型** | 检测 any 类型使用 | Warning |
+| 🔒 **硬编码密钥** | 检测密码/密钥硬编码 | Failure |
+
+**示例**:
+```typescript
+// 会触发警告
+const data: any = fetchData();
+console.log(data);
+// TODO: 处理错误
+```
+
+### 4. DingTalk Notification (钉钉群通知)
+
+**功能**:
+- 审查完成后自动发送通知到钉钉群
+- Markdown 格式，包含完整信息
+- 支持点击链接跳转到 PR
+
+**配置步骤**:
+1. 在钉钉群中添加自定义机器人
+2. 获取 Webhook URL
+3. 在 GitHub 仓库中添加 Secret:
+   - Settings → Secrets and variables → Actions
+   - 添加 `DINGTALK_WEBHOOK` = `https://oapi.dingtalk.com/robot/send?access_token=...`
+
+**通知示例**:
+```
+## 🔍 严审完成: PR #5
+
+**状态**: ✅ 通过
+
+**作者**: Tinet-AaronAn
+
+**分支**: feature/code-review-workflow
+
+**标题**: feat: 添加严审自动化代码审查工作流
+
+**详情**: [查看 PR](https://github.com/...)
+
+---
+🦞 随行 OpenClaw
+```
+
 ---
 
 ## 🛡️ Branch Protection Rules

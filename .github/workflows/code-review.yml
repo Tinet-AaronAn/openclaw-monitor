@@ -150,10 +150,8 @@ jobs:
           # 运行分析脚本
           node analyze-code.cjs
 
-          # 保存 annotations 到输出
-          echo "annotations<<EOF" >> $GITHUB_OUTPUT
-          cat annotations.json >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # 不保存到输出，直接使用文件
+          echo "Generated $(cat annotations.json | wc -l) bytes of annotations"
 
       - name: Analyze code changes
         id: analysis
@@ -295,9 +293,11 @@ jobs:
             let annotations = [];
 
             try {
-              annotations = JSON.parse(fs.readFileSync('annotations.json', 'utf8'));
+              if (fs.existsSync('annotations.json')) {
+                annotations = JSON.parse(fs.readFileSync('annotations.json', 'utf8'));
+              }
             } catch (e) {
-              console.log('No annotations found');
+              console.log('No annotations found or parse error:', e.message);
             }
 
             const check = await github.rest.checks.create({
@@ -316,6 +316,48 @@ jobs:
 
             console.log('Check Run created:', check.data.id);
             console.log('Annotations count:', annotations.length);
+
+            // 发送钉钉通知
+            const DINGTALK_WEBHOOK = process.env.DINGTALK_WEBHOOK;
+            if (DINGTALK_WEBHOOK) {
+              try {
+                const https = require('https');
+                const PR_NUMBER = context.payload.pull_request.number;
+                const PR_TITLE = context.payload.pull_request.title;
+                const PR_AUTHOR = context.payload.pull_request.user.login;
+                const PR_BRANCH = context.payload.pull_request.head.ref;
+                const STATUS = '${{ steps.result.outputs.status }}';
+                const PR_URL = context.payload.pull_request.html_url;
+
+                const message = JSON.stringify({
+                  msgtype: 'markdown',
+                  markdown: {
+                    title: `严审完成: PR #${PR_NUMBER}`,
+                    text: `## 🔍 严审完成: PR #${PR_NUMBER}\n\n**状态**: ${STATUS}\n\n**作者**: ${PR_AUTHOR}\n\n**分支**: ${PR_BRANCH}\n\n**标题**: ${PR_TITLE}\n\n**详情**: [查看 PR](${PR_URL})\n\n---\n🦞 随行 OpenClaw`
+                  }
+                });
+
+                const req = https.request(DINGTALK_WEBHOOK, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  }
+                }, (res) => {
+                  console.log(`DingTalk notification sent: ${res.statusCode}`);
+                });
+
+                req.on('error', (e) => {
+                  console.log('DingTalk notification failed:', e.message);
+                });
+
+                req.write(message);
+                req.end();
+              } catch (e) {
+                console.log('DingTalk notification error:', e.message);
+              }
+            }
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
 
       - name: Comment on PR
         uses: actions/github-script@v7

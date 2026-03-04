@@ -4,6 +4,7 @@ import { SessionList } from "./components/SessionList";
 import { RunList } from "./components/RunList";
 import { EventList } from "./components/EventList";
 import { StatCards } from "./components/StatCards";
+import { VersionInfo } from "./components/VersionInfo";
 
 export function App() {
   const { state, connected } = useMonitor();
@@ -33,6 +34,12 @@ export function App() {
             </h1>
           </div>
           <div className="flex items-center gap-4 text-sm">
+            {state.version && (
+              <VersionInfo
+                version={state.version.version}
+                buildTime={state.version.buildTime}
+              />
+            )}
             <div className="flex items-center gap-2">
               <div
                 className={`w-2 h-2 rounded-full ${

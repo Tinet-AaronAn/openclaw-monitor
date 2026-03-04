@@ -67,12 +67,15 @@ export type Session = SessionEntry & {
   sessionKey: string;
 };
 
+export type { VersionInfo } from "../server/types.js";
+
 export type MonitorState = {
   sessions: Session[];
   runs: Run[];
   events: AgentEventPayload[];
   connectedClients: number;
   startedAt: number;
+  version?: VersionInfo;
 };
 
 export type WSMessage =

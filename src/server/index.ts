@@ -10,6 +10,7 @@ import { OpenClawLogWatcher } from "./log-watcher.js";
 import { SessionFileWatcher } from "./session-file-watcher.js";
 import { EventCoordinator } from "./event-coordinator.js";
 import { OpenClawCLI } from "./openclaw-cli.js";
+import { getVersionInfo } from "./version.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -66,6 +67,7 @@ wsServer.setStateProvider(() => ({
   events: runTracker.getEvents().slice(-100),
   connectedClients: wsServer.getConnectedClients(),
   startedAt: Date.now(),
+  version: getVersionInfo(),
 }));
 
 // API Routes

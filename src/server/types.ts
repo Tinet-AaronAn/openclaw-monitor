@@ -1,5 +1,11 @@
 // OpenClaw Runtime Types - Based on openclaw source code analysis
 
+export type VersionInfo = {
+  version: string;
+  buildTime: string;
+  gitCommit?: string;
+};
+
 export type AgentEventStream =
   | "lifecycle"
   | "tool"
@@ -97,6 +103,7 @@ export type MonitorState = {
   events: AgentEventPayload[];
   connectedClients: number;
   startedAt: number;
+  version?: VersionInfo;
 };
 
 export type WSMessage =

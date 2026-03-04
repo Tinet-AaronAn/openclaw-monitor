@@ -3,6 +3,7 @@ import { StatCard } from "./StatCard";
 import { SessionsView } from "./SessionsView";
 import { RunsView } from "./RunsView";
 import { EventsStream } from "./EventsStream";
+import { VersionInfo } from "./VersionInfo";
 
 type DashboardProps = {
   state: MonitorState;
@@ -15,6 +16,16 @@ export function Dashboard({ state }: DashboardProps) {
 
   return (
     <div className="space-y-6">
+      {/* Version Info */}
+      {state.version && (
+        <div className="flex justify-end">
+          <VersionInfo
+            version={state.version.version}
+            buildTime={state.version.buildTime}
+          />
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard

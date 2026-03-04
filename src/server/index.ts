@@ -126,6 +126,7 @@ app.get("/api/state", (_req, res) => {
     events: runTracker.getEvents().slice(-100),
     connectedClients: wsServer.getConnectedClients(),
     startedAt: Date.now(),
+    version: getVersionInfo(),
   };
   res.json(state);
 });

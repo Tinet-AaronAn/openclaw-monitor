@@ -55,7 +55,12 @@ export class OpenClawLogWatcher {
    * 重放当天日志（用于修复数据准确性）
    * 处理 run done/timeout/agent end 事件，更新 Run 状态
    */
-  async replayLogs(): Promise<{ runsCompleted: number; runsAborted: number; runsTimedOut: number; runsFailed: number }> {
+  async replayLogs(): Promise<{
+    runsCompleted: number;
+    runsAborted: number;
+    runsTimedOut: number;
+    runsFailed: number;
+  }> {
     console.log("[LogWatcher] Starting log replay for run completion...");
 
     let runsCompleted = 0;
@@ -130,7 +135,8 @@ export class OpenClawLogWatcher {
               if (match) {
                 const [, runId, sessionId, isError] = match;
 
-                const eventType = isError === "true" ? "run_failed" : "run_completed";
+                const eventType =
+                  isError === "true" ? "run_failed" : "run_completed";
                 this.emitLifecycleEvent(
                   message,
                   time,

@@ -19,6 +19,9 @@ export class SessionFileWatcher {
     string,
     { tool: string; args: Record<string, unknown> }
   > = new Map();
+  // 新增：跟踪每个 session 的活动 run
+  private activeRuns: Map<string, string> = new Map(); // sessionKey -> runId
+  private runSeq: number = 0;
 
   constructor() {
     this.sessionsDir = process.env.HOME + "/.openclaw/agents/main/sessions";
@@ -152,7 +155,22 @@ export class SessionFileWatcher {
       // 捕获 assistant 消息中的 tool call
       if (data.type === "message" && data.message?.role === "assistant") {
         const content = data.message.content;
+        const sessionId = data.sessionId || "unknown";
+        const sessionKey = data.sessionKey || `session:${sessionId}`;
+
+        // 如果该 session 有活动 run，发送 run_completed 事件
         if (Array.isArray(content)) {
+          const hasToolCalls = content.some((item) => item.type === "toolCall");
+          
+          // 如果只有文本回复（没有 tool calls），这是 run 完成的信号
+          if (!hasToolCalls) {
+            const activeRunId = this.activeRuns.get(sessionKey);
+            if (activeRunId) {
+              this.handleRunCompleted(activeRunId, sessionKey, data.timestamp);
+            }
+          }
+
+          // 处理 tool calls
           for (const item of content) {
             if (item.type === "toolCall") {
               this.handleToolCall(item, data);
@@ -253,6 +271,8 @@ export class SessionFileWatcher {
     if (!this.onEvent) return;
 
     const { id: toolCallId, name: tool, arguments: args } = toolCall;
+    const sessionId = messageData.sessionId || "unknown";
+    const sessionKey = messageData.sessionKey || `session:${sessionId}`;
 
     // 存储工具调用信息
     this.toolCallIdMap.set(toolCallId, { tool, args });
@@ -260,10 +280,38 @@ export class SessionFileWatcher {
     // 生成参数摘要
     const argsSummary = this.formatArgs(tool, args);
 
-    // 发送事件
-    const event: AgentEventPayload = {
-      runId: messageData.id || "unknown",
-      seq: Date.now(),
+    // 检查是否需要发送 run_started 事件
+    const activeRunId = this.activeRuns.get(sessionKey);
+    const runId = activeRunId || `run-${sessionId}-${Date.now()}`;
+
+    // 如果该 session 没有活动 run，发送 run_started
+    if (!activeRunId) {
+      this.activeRuns.set(sessionKey, runId);
+      this.runSeq++;
+
+      const runStartedEvent: AgentEventPayload = {
+        runId,
+        seq: this.runSeq,
+        stream: "lifecycle",
+        ts: new Date(messageData.timestamp).getTime(),
+        data: {
+          event: "run_started",
+          timestamp: messageData.timestamp,
+          sessionId,
+        },
+        sessionKey,
+      };
+
+      this.onEvent(runStartedEvent);
+      console.log(
+        `[SessionFileWatcher] Run started: ${runId.slice(0, 16)} for session ${sessionKey.slice(0, 20)}`,
+      );
+    }
+
+    // 发送 tool 事件
+    const toolEvent: AgentEventPayload = {
+      runId,
+      seq: ++this.runSeq,
       stream: "tool",
       ts: new Date(messageData.timestamp).getTime(),
       data: {
@@ -273,12 +321,45 @@ export class SessionFileWatcher {
         args: argsSummary,
         rawArgs: args,
       },
-      sessionKey: "from-session-file",
+      sessionKey,
     };
 
-    this.onEvent(event);
+    this.onEvent(toolEvent);
     console.log(
       `[SessionFileWatcher] Tool call: ${tool} ${argsSummary.slice(0, 50)}`,
+    );
+  }
+
+  /**
+   * 处理 run 完成事件
+   */
+  private handleRunCompleted(
+    runId: string,
+    sessionKey: string,
+    timestamp: string,
+  ): void {
+    if (!this.onEvent) return;
+
+    // 从 activeRuns 中移除
+    this.activeRuns.delete(sessionKey);
+
+    // 发送 run_completed 事件
+    const completedEvent: AgentEventPayload = {
+      runId,
+      seq: ++this.runSeq,
+      stream: "lifecycle",
+      ts: new Date(timestamp).getTime(),
+      data: {
+        event: "run_completed",
+        timestamp,
+        sessionId: sessionKey.split(":")[1],
+      },
+      sessionKey,
+    };
+
+    this.onEvent(completedEvent);
+    console.log(
+      `[SessionFileWatcher] Run completed: ${runId.slice(0, 16)} for session ${sessionKey.slice(0, 20)}`,
     );
   }
 

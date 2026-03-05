@@ -9,11 +9,14 @@ type SessionMessageCallback = (
   time: number,
 ) => void;
 
+type SessionDeleteCallback = (sessionId: string) => void;
+
 export class SessionFileWatcher {
   private sessionsDir: string;
   private watcher: ReturnType<typeof watch> | null = null;
   private onEvent: ((event: AgentEventPayload) => void) | null = null;
   private onSessionMessage: SessionMessageCallback | null = null;
+  private onSessionDelete: SessionDeleteCallback | null = null;
   private filePositions: Map<string, number> = new Map();
   private toolCallIdMap: Map<
     string,
@@ -34,13 +37,24 @@ export class SessionFileWatcher {
     this.scanExistingFiles();
 
     // 监听文件变化
-    this.watcher = watch(this.sessionsDir, (_eventType, filename) => {
-      if (
-        filename &&
-        filename.endsWith(".jsonl") &&
-        !filename.includes(".reset.") &&
-        !filename.includes(".deleted.")
-      ) {
+    this.watcher = watch(this.sessionsDir, (eventType, filename) => {
+      if (!filename || !filename.endsWith(".jsonl")) {
+        return;
+      }
+
+      // 检查是否是删除/重置的文件
+      if (filename.includes(".deleted.") || filename.includes(".reset.")) {
+        // 提取 sessionId 并通知删除
+        const sessionId = filename.split(".")[0];
+        if (this.onSessionDelete) {
+          this.onSessionDelete(sessionId);
+        }
+        console.log(`[SessionFileWatcher] Session deleted: ${sessionId}`);
+        return;
+      }
+
+      // 正常文件变化
+      if (eventType === "change" || eventType === "rename") {
         const filePath = `${this.sessionsDir}/${filename}`;
         this.readFileChanges(filePath);
       }
@@ -63,6 +77,10 @@ export class SessionFileWatcher {
 
   setSessionMessageCallback(callback: SessionMessageCallback): void {
     this.onSessionMessage = callback;
+  }
+
+  setSessionDeleteCallback(callback: SessionDeleteCallback): void {
+    this.onSessionDelete = callback;
   }
 
   private async scanExistingFiles(): Promise<void> {
@@ -155,8 +173,11 @@ export class SessionFileWatcher {
       // 捕获 assistant 消息中的 tool call
       if (data.type === "message" && data.message?.role === "assistant") {
         const content = data.message.content;
-        const sessionId = data.sessionId || "unknown";
-        const sessionKey = data.sessionKey || `session:${sessionId}`;
+        // 从文件路径提取 sessionId
+        const sessionId = filePath
+          ? filePath.split("/").pop()?.replace(".jsonl", "") || "unknown"
+          : data.sessionId || "unknown";
+        const sessionKey = `session:${sessionId}`;
 
         // 如果该 session 有活动 run，发送 run_completed 事件
         if (Array.isArray(content)) {
@@ -173,7 +194,7 @@ export class SessionFileWatcher {
           // 处理 tool calls
           for (const item of content) {
             if (item.type === "toolCall") {
-              this.handleToolCall(item, data);
+              this.handleToolCall(item, data, filePath);
             }
           }
         }
@@ -267,12 +288,16 @@ export class SessionFileWatcher {
     );
   }
 
-  private handleToolCall(toolCall: any, messageData: any): void {
+  private handleToolCall(toolCall: any, messageData: any, filePath?: string): void {
     if (!this.onEvent) return;
 
     const { id: toolCallId, name: tool, arguments: args } = toolCall;
-    const sessionId = messageData.sessionId || "unknown";
-    const sessionKey = messageData.sessionKey || `session:${sessionId}`;
+    
+    // 从文件路径提取 sessionId
+    const sessionId = filePath
+      ? filePath.split("/").pop()?.replace(".jsonl", "") || "unknown"
+      : messageData.sessionId || "unknown";
+    const sessionKey = `session:${sessionId}`;
 
     // 存储工具调用信息
     this.toolCallIdMap.set(toolCallId, { tool, args });

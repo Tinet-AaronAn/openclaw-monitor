@@ -53,13 +53,15 @@ export class OpenClawLogWatcher {
 
   /**
    * 重放当天日志（用于修复数据准确性）
-   * 只处理 run done 事件，更新 Run 状态
+   * 处理 run done/timeout/agent end 事件，更新 Run 状态
    */
-  async replayLogs(): Promise<{ runsCompleted: number; runsAborted: number }> {
+  async replayLogs(): Promise<{ runsCompleted: number; runsAborted: number; runsTimedOut: number; runsFailed: number }> {
     console.log("[LogWatcher] Starting log replay for run completion...");
 
     let runsCompleted = 0;
     let runsAborted = 0;
+    let runsTimedOut = 0;
+    let runsFailed = 0;
 
     try {
       const content = await readFile(this.logFile, "utf-8");
@@ -72,7 +74,7 @@ export class OpenClawLogWatcher {
             const message = log["1"] || log.message || "";
             const time = log.time || new Date().toISOString();
 
-            // 只处理 run done 事件
+            // 处理 run done 事件
             if (message.includes("embedded run done")) {
               const match = message.match(
                 /embedded run done: runId=([^\s]+) sessionId=([^\s]+) durationMs=(\d+) aborted=(true|false)/,
@@ -80,7 +82,6 @@ export class OpenClawLogWatcher {
               if (match) {
                 const [, runId, sessionId, durationMs, aborted] = match;
 
-                // 直接发送完成事件
                 const eventType =
                   aborted === "true" ? "run_aborted" : "run_completed";
                 this.emitLifecycleEvent(
@@ -99,6 +100,53 @@ export class OpenClawLogWatcher {
                 }
               }
             }
+
+            // 处理 run timeout 事件（新增）
+            if (message.includes("embedded run timeout")) {
+              const match = message.match(
+                /embedded run timeout: runId=([^\s]+) sessionId=([^\s]+) timeoutMs=(\d+)/,
+              );
+              if (match) {
+                const [, runId, sessionId, timeoutMs] = match;
+
+                this.emitLifecycleEvent(
+                  message,
+                  time,
+                  "run_aborted",
+                  runId,
+                  sessionId,
+                  parseInt(timeoutMs),
+                );
+
+                runsTimedOut++;
+              }
+            }
+
+            // 处理 run agent end 事件（新增）
+            if (message.includes("embedded run agent end")) {
+              const match = message.match(
+                /embedded run agent end: runId=([^\s]+)(?:\s+sessionId=([^\s]+))?\s+isError=(true|false)(?:\s+error=(.+))?/,
+              );
+              if (match) {
+                const [, runId, sessionId, isError] = match;
+
+                const eventType = isError === "true" ? "run_failed" : "run_completed";
+                this.emitLifecycleEvent(
+                  message,
+                  time,
+                  eventType,
+                  runId,
+                  sessionId || undefined,
+                  undefined,
+                );
+
+                if (isError === "true") {
+                  runsFailed++;
+                } else {
+                  runsCompleted++;
+                }
+              }
+            }
           }
         } catch (error) {
           // 忽略解析错误
@@ -106,9 +154,9 @@ export class OpenClawLogWatcher {
       }
 
       console.log(
-        `[LogWatcher] Replay completed: ${runsCompleted} runs completed, ${runsAborted} runs aborted`,
+        `[LogWatcher] Replay completed: ${runsCompleted} completed, ${runsAborted} aborted, ${runsTimedOut} timed out, ${runsFailed} failed`,
       );
-      return { runsCompleted, runsAborted };
+      return { runsCompleted, runsAborted, runsTimedOut, runsFailed };
     } catch (error) {
       console.error("[LogWatcher] Replay failed:", error);
       throw error;
@@ -228,6 +276,16 @@ export class OpenClawLogWatcher {
           this.parseRunDone(message, time);
         }
 
+        // 解析 run timeout 事件（新增）
+        if (message.includes("embedded run timeout")) {
+          this.parseRunTimeout(message, time);
+        }
+
+        // 解析 run agent end 事件（新增）
+        if (message.includes("embedded run agent end")) {
+          this.parseAgentEnd(message, time);
+        }
+
         // 解析 tool 事件
         if (message.includes("embedded run tool")) {
           this.handleAgentLog(log);
@@ -269,6 +327,69 @@ export class OpenClawLogWatcher {
         runId,
         sessionId,
         parseInt(durationMs),
+      );
+    }
+  }
+
+  /**
+   * 解析 run timeout 事件（新增)
+   */
+  private parseRunTimeout(message: string, time: string): void {
+    // embedded run timeout: runId=xxx sessionId=yyy timeoutMs=zzz
+    const match = message.match(
+      /embedded run timeout: runId=([^\s]+) sessionId=([^\s]+) timeoutMs=(\d+)/,
+    );
+    if (match) {
+      const [, runId, sessionId, timeoutMs] = match;
+
+      // 确保 runId -> sessionId 映射
+      this.runSessionMap.set(runId, sessionId);
+
+      // 发送 run_aborted 事件
+      this.emitLifecycleEvent(
+        message,
+        time,
+        "run_aborted",
+        runId,
+        sessionId,
+        parseInt(timeoutMs),
+      );
+
+      console.log(
+        `[LogWatcher] Run timeout: runId=${runId.slice(0, 8)} sessionId=${sessionId.slice(0, 8)}`,
+      );
+    }
+  }
+
+  /**
+   * 解析 agent end 事件（新增)
+   */
+  private parseAgentEnd(message: string, time: string): void {
+    // embedded run agent end: runId=xxx [sessionId=yyy] isError=true error=xxx
+    const match = message.match(
+      /embedded run agent end: runId=([^\s]+)(?:\s+sessionId=([^\s]+))?\s+isError=(true|false)(?:\s+error=(.+))?/,
+    );
+    if (match) {
+      const [, runId, sessionId, isError] = match;
+
+      // 如果有 sessionId，确保 runId -> sessionId 映射
+      if (sessionId) {
+        this.runSessionMap.set(runId, sessionId);
+      }
+
+      // 发送 run_failed 或 run_completed 事件
+      const eventType = isError === "true" ? "run_failed" : "run_completed";
+      this.emitLifecycleEvent(
+        message,
+        time,
+        eventType,
+        runId,
+        sessionId || undefined,
+        undefined,
+      );
+
+      console.log(
+        `[LogWatcher] Agent end: runId=${runId.slice(0, 8)} isError=${isError}`,
       );
     }
   }

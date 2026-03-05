@@ -215,6 +215,12 @@ if (ENABLE_LOG_WATCHER) {
 
 // Setup session file watcher callbacks
 sessionFileWatcher.setEventCallback((event) => {
+  // 处理事件（创建 run）
+  runTracker.processEvent(event);
+  
+  // 广播给所有客户端
+  wsServer.broadcastEvent(event);
+
   // 处理工具调用，存储 toolCallId -> 参数映射
   const toolData = event.data as any;
   if (toolData.toolCallId && toolData.rawArgs) {

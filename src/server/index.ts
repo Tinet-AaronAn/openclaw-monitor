@@ -178,17 +178,12 @@ sessionMonitor.setUpdateCallback((sessionKey, entry) => {
 // Setup log watcher callbacks
 if (ENABLE_LOG_WATCHER) {
   logWatcher.setEventCallback((event) => {
-    // 尝试增强事件（添加工具参数）
+    // 只增强工具参数，不创建 run（由 SessionFileWatcher 统一管理）
     const toolCallId = (event.data as any)?.toolCallId;
     const enrichedEvent = eventCoordinator.enrichEvent(event, toolCallId);
 
-    const run = runTracker.processEvent(enrichedEvent);
+    // 广播增强后的事件
     wsServer.broadcastEvent(enrichedEvent);
-
-    // 检查是否是新 Run
-    if (event.seq === 0 || event.data.event === "run_started") {
-      wsServer.broadcastRunStarted(run);
-    }
   });
 
   // 当发现新 session 时更新 sessionsStore
@@ -217,7 +212,7 @@ if (ENABLE_LOG_WATCHER) {
 sessionFileWatcher.setEventCallback((event) => {
   // 处理事件（创建 run）
   runTracker.processEvent(event);
-  
+
   // 广播给所有客户端
   wsServer.broadcastEvent(event);
 
@@ -251,6 +246,20 @@ sessionFileWatcher.setSessionMessageCallback(
     }
   },
 );
+
+// Setup session file watcher delete callback
+sessionFileWatcher.setSessionDeleteCallback((sessionId) => {
+  // 找到并删除对应的 session
+  for (const [sessionKey, entry] of sessionsStore.entries()) {
+    if (entry.sessionId === sessionId) {
+      sessionsStore.delete(sessionKey);
+      console.log(
+        `[SessionFileWatcher] Deleted session from store: ${sessionKey}`,
+      );
+      break;
+    }
+  }
+});
 
 // 定期轮询 OpenClaw CLI 获取 sessions
 if (ENABLE_CLI_POLLING) {

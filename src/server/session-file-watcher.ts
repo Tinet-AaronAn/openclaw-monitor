@@ -182,7 +182,7 @@ export class SessionFileWatcher {
         // 如果该 session 有活动 run，发送 run_completed 事件
         if (Array.isArray(content)) {
           const hasToolCalls = content.some((item) => item.type === "toolCall");
-          
+
           // 如果只有文本回复（没有 tool calls），这是 run 完成的信号
           if (!hasToolCalls) {
             const activeRunId = this.activeRuns.get(sessionKey);
@@ -288,11 +288,15 @@ export class SessionFileWatcher {
     );
   }
 
-  private handleToolCall(toolCall: any, messageData: any, filePath?: string): void {
+  private handleToolCall(
+    toolCall: any,
+    messageData: any,
+    filePath?: string,
+  ): void {
     if (!this.onEvent) return;
 
     const { id: toolCallId, name: tool, arguments: args } = toolCall;
-    
+
     // 从文件路径提取 sessionId
     const sessionId = filePath
       ? filePath.split("/").pop()?.replace(".jsonl", "") || "unknown"

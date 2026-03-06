@@ -212,7 +212,7 @@ if (ENABLE_LOG_WATCHER) {
 sessionFileWatcher.setEventCallback((event) => {
   // 处理事件（创建 run）
   runTracker.processEvent(event);
-  
+
   // 广播给所有客户端
   wsServer.broadcastEvent(event);
 
@@ -253,7 +253,9 @@ sessionFileWatcher.setSessionDeleteCallback((sessionId) => {
   for (const [sessionKey, entry] of sessionsStore.entries()) {
     if (entry.sessionId === sessionId) {
       sessionsStore.delete(sessionKey);
-      console.log(`[SessionFileWatcher] Deleted session from store: ${sessionKey}`);
+      console.log(
+        `[SessionFileWatcher] Deleted session from store: ${sessionKey}`,
+      );
       break;
     }
   }
